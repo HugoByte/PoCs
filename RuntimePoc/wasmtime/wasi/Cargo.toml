@@ -1,0 +1,13 @@
+[package]
+name = "wasiexample"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasmtime = "0.38.1"
+anyhow = "1.0.56"
+wasmtime-wasi= "0.38.1"
+wasi-experimental-http-wasmtime = "0.10.0"
+wasi-common = "0.38.1"
