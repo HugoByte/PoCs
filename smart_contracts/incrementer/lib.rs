@@ -11,9 +11,7 @@ mod incrementer {
 		value: i32,
 		my_value:ink_storage::Mapping<AccountId, i32>,
 
-
 	}
-
 	impl Incrementer {
 		#[ink(constructor)]
 		pub fn new(init_value: i32) -> Self {
