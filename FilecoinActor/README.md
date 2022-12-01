@@ -35,6 +35,15 @@ docker exec -it lotus-fvm-localnet watch lotus chain list --count=3
 
 ## Deploy to the Filecoin 
 1. Connect to the local net
+    - Before that need to expose the ip in docker container 
+        - Open the config.toml file present inside the ./lotus folder in container 
+        - Uncomment the ListenAddress to 0.0.0.0
+            eg: ListenAddress = "/ip4/0.0.0.0/tcp/1234/http"
+        - Restart the Node
+    - Copy the token , token present in the toke fin inside the .lotus folder.
+    - Export the API
+      eg: export FULLNODE_API_INFO="<token>:/ip4/127.0.0.1/tcp/8088/http".
+
 2. Install the Actor code 
     ```
     lotus chain install-actor <wasm-file> 
