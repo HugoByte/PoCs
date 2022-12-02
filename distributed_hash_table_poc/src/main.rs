@@ -12,7 +12,7 @@ where
     T: Clone,
 {
     let mut a = Default::default();
-    
+
     <A as AsMut<[T]>>::as_mut(&mut a).clone_from_slice(slice);
     a
 }
@@ -35,5 +35,4 @@ fn main() {
     thread::sleep(Duration::from_millis(1000));
 
     assert_eq!(node.get(&key).unwrap(), value);
-   
 }
