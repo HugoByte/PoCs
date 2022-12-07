@@ -3,7 +3,6 @@ use super::*;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Flow {
     pub flow_type: String,
-    pub task_name: String,
     pub depends_on: Option<DependsOn>,
 }
 

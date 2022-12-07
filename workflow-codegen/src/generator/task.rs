@@ -6,6 +6,7 @@ pub struct Task {
     pub name: String,
     pub input_args: Vec<Args>,
     pub properties: HashMap<String, String>,
+    pub flow: Flow,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -18,7 +19,7 @@ impl Task {
     pub fn generate_task(&self) -> String {
         let mut scope = Scope::new();
         let task_name = convert_to_pascal(&self.name);
-        let mut input_struct = self.generate_input_struct(&task_name);
+        let mut input_struct = self.generate_struct(&task_name);
 
         scope.push_struct(input_struct.vis("pub").to_owned());
 
@@ -28,9 +29,7 @@ impl Task {
         let input_field = Field::new("input_args", format!("{}Input", task_name).as_str())
             .vis("pub")
             .to_owned();
-        let output_filed = Field::new("output_args", format!("{}Output", task_name).as_str())
-            .vis("pub")
-            .to_owned();
+        let output_filed = Field::new("output", "Value").vis("pub").to_owned();
 
         main_struct.push_field(input_field);
         main_struct.push_field(output_filed);
@@ -41,7 +40,7 @@ impl Task {
         scope.to_string()
     }
 
-    fn generate_input_struct(&self, name: &str) -> Struct {
+    fn generate_struct(&self, name: &str) -> Struct {
         let mut input_struct = Struct::new(format!("{}Input", name).as_str());
 
         self.input_args.iter().for_each(|args| {
@@ -51,12 +50,6 @@ impl Task {
         });
 
         input_struct
-    }
-
-    pub fn generate_variant(&self) -> Variant {
-        let task_name = convert_to_pascal(&self.name);
-        let var = format!("{}({})", task_name, format!("{}Output", task_name).as_str());
-        Variant::new(var)
     }
 
     pub fn generate_impl_for_task(&self) -> String {

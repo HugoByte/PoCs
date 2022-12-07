@@ -1,0 +1,82 @@
+workflow:
+  name: Name
+  version: 0.0.1
+  tasks:
+    - task:
+      id: "task1"
+      kind: "OpenWhisk"
+      name: "cartype"
+      input_args:
+        - name: "car_type"
+          arg_type: "String"
+      properties:
+        api_host: "https://65.20.70.146:31001"
+        auth_token: "23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP"
+        insecure: "true"
+        namespace: "guest"
+      flow: 
+        flow_type: "Init"
+        depend_on: null
+    - task:
+      kind: "OpenWhisk"
+      name: "modelavail"
+      input_args:
+        - name: "car_company_list"
+          arg_type: "HashMap<String,Vec<String>>"
+        - name: "company_name"
+          arg_type: "String"
+      properties:
+        api_host: "https://65.20.70.146:31001"
+        auth_token: "23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP"
+        insecure: "true"
+        namespace: "guest"
+      flow: 
+        flow_type: "Pipe"
+        depends_on:
+          operation: null
+          task:
+            - name: "cartype"
+              fields:
+                - car_company_list
+    - task:
+      kind: "OpenWhisk"
+      name: "modelsprice"
+      input_args:
+        - name: "models"
+          arg_type: "Vec<String>"
+      properties:
+        api_host: "https://65.20.70.146:31001"
+        auth_token: "23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP"
+        insecure: "true"
+        namespace: "guest"  
+      flow:
+        flow_type: "Pipe"
+        depends_on:
+          operation: null
+          task:
+            - name: "modelavail"
+              fields:
+                - models
+    - task:
+      kind: "OpenWhisk"
+      name: "purchase"
+      input_args:
+        - name: "model_price_list"
+          arg_type: "HashMap<String,i32>"
+        - name: "model_name"
+          arg_type: "String"
+        - name: "price"
+          arg_type: "i32"
+      properties:
+        api_host: "https://65.20.70.146:31001"
+        auth_token: "23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP"
+        insecure: "true"
+        namespace: "guest"
+      flow:
+        flow_type: "Term"
+        depends_on:
+          operation: null
+          task:
+            - name: modelsprice
+              fields:
+                - model_price_list
