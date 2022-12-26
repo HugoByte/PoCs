@@ -60,11 +60,11 @@ pub struct State {
 }
 
 #[no_mangle]
-pub fn invoke(_: u32) -> u32 {
+pub fn invoke(params: u32) -> u32 {
     // Conduct method dispatch. Handle input parameters and return data.
     let ret: Option<RawBytes> = match sdk::message::method_number() {
         1 => constructor(),
-        2 => say_hello(),
+        2 => say_hello(params),
         3 => call_hello(),
         _ => abort!(USR_UNHANDLED_MESSAGE, "unrecognized method"),
     };

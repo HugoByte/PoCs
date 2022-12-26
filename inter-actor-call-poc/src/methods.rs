@@ -1,23 +1,24 @@
 use std::str::FromStr;
 
 use fvm_shared::{address::Address, econ::TokenAmount};
-
+use serde::{Deserialize, Serialize};
 use super::*;
 
-/// Method num 2.
-pub fn say_hello() -> Option<RawBytes> {
-    let mut state = State::load();
-    state.count += 1;
-    state.save();
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Hello {
+    pub name: String,
+}
 
-    let caller = sdk::message::caller();
-    let origin = sdk::message::origin();
-    let receiver = sdk::message::receiver();
+///Method 2
+pub fn say_hello(params : u32) -> Option<RawBytes> {
+    sdk::vm::set_panic_handler();
+
+    let params = sdk::message::params_raw(params).unwrap().1;
+    let params: Hello = serde_json::from_slice(&params).unwrap();
 
     let ret = to_vec(
         format!(
-            "Hello world {caller}/{origin}/{receiver} #{}!",
-            &state.count
+            "Hello world  {}", params.name
         )
         .as_str(),
     );
@@ -32,7 +33,6 @@ pub fn say_hello() -> Option<RawBytes> {
         }
     }
 }
-
 /// Method 3
 pub fn call_hello() -> Option<RawBytes> {
     // let a = Address::from_str("f01002");  both are fine
