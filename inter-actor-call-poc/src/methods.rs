@@ -35,6 +35,7 @@ pub fn say_hello() -> Option<RawBytes> {
 
 /// Method 3
 pub fn call_hello() -> Option<RawBytes> {
+    // let a = Address::from_str("f01002");  both are fine
     let a = Address::from_str("f2g25mp47ixng7frzchiiwgaushvmrpylsmy5ehba");
     let b = match a {
         Ok(s) => s,
