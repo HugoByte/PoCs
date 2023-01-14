@@ -1,101 +1,51 @@
 # cosmwasm-ibc
 
-IBC implementation in CW contracts
+IBC implementation in CW contracts.
 
-This is a simple IBC enabled CosmWasm smart contract. It expects to be
+This is a simple IBC enabled CosmWasm smart contract. It expects to be deployed on two chains and will send messages to its counterpart. It then counts the number of times messages have been received on both sides.
 
-deployed on two chains and will send messages to its
+### At a high level, to use this contract
 
-counterpart. It then counts the number of times messages have been
-
-received on both sides.
-
-At a high level, to use this contract:
-
-1. Store and instantiate the contract on two IBC enabled chains. We
-
-will call these chains chain A and chain B.
+1. Store and instantiate the contract on two IBC enabled chains. We will call these chains chain A and chain B.
 
 2. Configure and run a relayer to connect the two contracts.
 
-3. Execute the `Increment {}` method on one contract to increment the
+3. Execute the `Increment {}` method on one contract to increment the send a message and increment the count on the other one.
 
-send a message and increment the count on the other one.
-
-4. Use the `GetCount { connection }` query to determine the message
-
-count for a given connection.
+4. Use the `GetCount { connection }` query to determine the message count for a given connection.
 
 ## Background
 
-To connect two CosmWasm contracts over IBC you must establish an IBC
+To connect two CosmWasm contracts over IBC you must establish an IBC channel between them. The IBC channel establishment process uses a four way handshake. Here is a summary of the steps:
 
-channel between them. The IBC channel establishment process uses a
+1. `OpenInit` Hello chain B, here is information that you can use to verify I am chain A. Do you have information I can use?
 
-four way handshake. Here is a summary of the steps:
+2. `OpenTry` Hello chain A, I have verified that you are who you say you are. Here is my verification information.
 
-1. `OpenInit` Hello chain B, here is information that you can use to
-
-verify I am chain A. Do you have information I can use?
-
-2. `OpenTry` Hello chain A, I have verified that you are who you say
-
-you are. Here is my verification information.
-
-3. `OpenAck` Hello chain B. Thank you for that information I have
-
-verified you are who you say you are. I am now ready to talk.
+3. `OpenAck` Hello chain B. Thank you for that information I have verified you are who you say you are. I am now ready to talk.
 
 4. `OpenConfirm` Hello chain A. I am also now ready to talk.
 
-Once the handshake has been completed a channel will be established
+Once the handshake has been completed a channel will be established that the ibc messages may be sent over. In order to do a handshake and receive IBC messages your contract must implement the following entry points (see `src/ibc.rs`):
 
-that the ibc messages may be sent over. In order to do a handshake and
+1. `ibc_channel_open` - Handles the `OpenInit` and `OpenTry` handshake steps.
 
-receive IBC messages your contract must implement the following entry
+2. `ibc_channel_connect` - Handles the `OpenAck` and `OpenConfirm` handshake steps.
 
-points (see `src/ibc.rs`):
+3. `ibc_channel_close` - Handles the closing of an IBC channel by the counterparty.
 
-1. `ibc_channel_open` - Handles the `OpenInit` and `OpenTry` handshake
+4. `ibc_packet_receive` - Handles receiving IBC packets from the counterparty.
 
-steps.
-
-2. `ibc_channel_connect` - Handles the `OpenAck` and `OpenConfirm`
-
-handshake steps.
-
-3. `ibc_channel_close` - Handles the closing of an IBC channel by the
-
-counterparty.
-
-4. `ibc_packet_receive` - Handles receiving IBC packets from the
-
-counterparty.
-
-5. `ibc_packet_ack` - Handles ACK messages from the countarparty. This
-
-is effectively identical to the ACK message type in
-
-[TCP](https://developer.mozilla.org/en-US/docs/Glossary/TCP_handshake).
+5. `ibc_packet_ack` - Handles ACK messages from the countarparty. This is effectively identical to the ACK message type in [TCP](https://developer.mozilla.org/en-US/docs/Glossary/TCP_handshake).
 
 6. `ibc_packet_timeout` - Handles packet timeouts.
 
-Having implemented these methods, once you instantiate an instance of
+Having implemented these methods, once you instantiate an instance of the contract it will be assigned a port. Ports identify a receiver on a blockchain in much the same way as ports identify applications on a computer.
 
-the contract it will be assigned a port. Ports identify a receiver on
-
-a blockchain in much the same way as ports identify applications on a
-
-computer.
-
-You can find the port that has been assigned to your contract by
-
-running `wam query wasm contract <ADDRESS>` and inspecting the
-
-`ibc_port_id` field. For example:
+You can find the port that has been assigned to your contract by running
+`wam query wasm contract <ADDRESS>` and inspecting the `ibc_port_id` field. For example:
 
 ```
-
 archwayd query wasm contract archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh --node <https://rpc.constantine-1.archway.tech:443>
 
 address: archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh
@@ -118,34 +68,35 @@ label: ics20
 
 ```
 
-To establish a connecton between two contracts you will need to set
+## RELAYER SETUP
 
-up a relayer.
+To establish a connecton between two contracts you will need to setup a relayer.
 
 Using [Ignite][https://docs.ignite.com/] relayer :
 
 1. Import the account which are having funds that can be used in relayer.
 
-      ```ignite account import [account_name]```
+   `ignite account import [account_name]`
 
 2. Configure the relayer by providing all the flags.
- ```
- ignite relayer configure -a \
- --source-rpc "https://rpc.constantine-1.archway.tech:443" \
- --source-faucet "https://faucet.constantine-1.archway.tech" \
- --source-port "wasm.archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh" \
- --source-version "ics20-1" \
- --source-gasprice "0.25uconst" \
- --source-prefix "archway" \
- --source-gaslimit 300000 \
- --target-rpc "https://rpc.malaga-420.cosmwasm.com:443" \
- --target-faucet "https://faucet.malaga-420.cosmwasm.com" \
- --target-port "wasm.wasm1vxu6js9d3vvmyltmy9lc9jr96ul5a3vk2u2f9uzp3r4dvx4mu4mq33ltxd" \
- --target-version "ics20-1" \
- --target-gasprice "0.25umlg" \
- --target-prefix "wasm" \
- --target-gaslimit 300000
- ```
+
+```
+ignite relayer configure -a \
+--source-rpc "https://rpc.constantine-1.archway.tech:443" \
+--source-faucet "https://faucet.constantine-1.archway.tech" \
+--source-port "wasm.archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh" \
+--source-version "ics20-1" \
+--source-gasprice "0.25uconst" \
+--source-prefix "archway" \
+--source-gaslimit 300000 \
+--target-rpc "https://rpc.malaga-420.cosmwasm.com:443" \
+--target-faucet "https://faucet.malaga-420.cosmwasm.com" \
+--target-port "wasm.wasm1vxu6js9d3vvmyltmy9lc9jr96ul5a3vk2u2f9uzp3r4dvx4mu4mq33ltxd" \
+--target-version "ics20-1" \
+--target-gasprice "0.25umlg" \
+--target-prefix "wasm" \
+--target-gaslimit 300000
+```
 
 3. Provide the source and target account imported.
 
@@ -158,12 +109,12 @@ Using [Ignite][https://docs.ignite.com/] relayer :
  ? Target Account hermiscosmos
 
  🔐  Account on "source" is hermisarchway(archway1vm62p5n37j5ffrwr5mgnltdmgxcax0frcpav8q)
-  
+
   |· faucet is not operational: Internal Server Error
   |· (balance: -)
 
  🔐  Account on "target" is hermiscosmos(wasm134pggaja9zu52mdfdv4pykn5g6j5m47lfn72yd)
-  
+
   |· faucet is not operational: invalid character 'W' looking for beginning of value
   |· (balance: -)
 
@@ -171,7 +122,7 @@ Using [Ignite][https://docs.ignite.com/] relayer :
 ```
 
 4. Start the relayer by using command:
-  ```ignite relayer connect```
+   `ignite relayer connect`
 
 ```
  ------
