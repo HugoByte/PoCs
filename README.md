@@ -110,13 +110,13 @@ ignite relayer configure -a \
 
  🔐  Account on "source" is hermisarchway(archway1vm62p5n37j5ffrwr5mgnltdmgxcax0frcpav8q)
 
-  |· faucet is not operational: Internal Server Error
-  |· (balance: -)
+  |· received coins from a faucet
+  |· (balance: 59999977uconst)
 
  🔐  Account on "target" is hermiscosmos(wasm134pggaja9zu52mdfdv4pykn5g6j5m47lfn72yd)
 
-  |· faucet is not operational: invalid character 'W' looking for beginning of value
-  |· (balance: -)
+  |· received coins from a faucet
+  |· (balance: 59999977umlg)
 
  ⛓  Configured chains: constantine-1-malaga-420
 ```
