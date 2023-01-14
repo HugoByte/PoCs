@@ -45,26 +45,26 @@ Having implemented these methods, once you instantiate an instance of the contra
 You can find the port that has been assigned to your contract by running
 `wam query wasm contract <ADDRESS>` and inspecting the `ibc_port_id` field. For example:
 
+` archwayd query wasm contract archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh --node <https://rpc.constantine-1.archway.tech:443> `
+
 ```
-archwayd query wasm contract archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh --node <https://rpc.constantine-1.archway.tech:443>
+      address: archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh
 
-address: archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh
+      contract_info:
 
-contract_info:
+      admin: ""
 
-admin: ""
+      code_id: "301"
 
-code_id: "301"
+      created: null
 
-created: null
+      creator: archway12yzhvucd7f7008ua7saep09kx6zl2wdax5lwfc
 
-creator: archway12yzhvucd7f7008ua7saep09kx6zl2wdax5lwfc
+      extension: null
 
-extension: null
+      ibc_port_id: wasm.archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh
 
-ibc_port_id: wasm.archway1wt4l7uh25x009vgky052xxss95hjnw5z9vy8m396mz8tyd384jgsugz0dh
-
-label: ics20
+      label: ics20
 
 ```
 
