@@ -1,4 +1,4 @@
-# cosmwasm-ibc
+# cosmwasm-ibc - Example cosmwasm contract implementation with IBC enabled
 
 IBC implementation in CW contracts.
 
