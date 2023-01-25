@@ -72,7 +72,7 @@ You can find the port that has been assigned to your contract by running
 
 To establish a connecton between two contracts you will need to setup a relayer.
 
-Using [Ignite][https://docs.ignite.com/] relayer :
+Using [Ignite](https://docs.ignite.com/) relayer :
 
 1. Import the account which are having funds that can be used in relayer.
 
