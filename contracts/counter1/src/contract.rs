@@ -1,6 +1,6 @@
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{College, STATE};
+use crate::state::{Counter, STATE};
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -18,7 +18,7 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = College { students: vec![] };
+    let state = Counter { count: 0 };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
 
@@ -45,11 +45,16 @@ pub mod execute {
     use super::*;
 
     pub fn increment(
-        _deps: DepsMut,
+        deps: DepsMut,
         info: MessageInfo,
 
         contract_address: String,
     ) -> Result<Response, ContractError> {
+        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.count += 1;
+            Ok(state)
+        })?;
+
         let action: CosmosMsg<_> = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: contract_address,
             msg: to_binary(&counter2::msg::ExecuteMsg::Increment {}).unwrap(),
@@ -65,18 +70,18 @@ pub mod execute {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount { address } => to_binary(&query::student(deps, address)?),
+        QueryMsg::GetCount { address } => to_binary(&query::count(deps, address)?),
     }
 }
 
 pub mod query {
 
-    use counter2::msg::GetCountResponse;
+    use crate::msg::GetCounterResponse;
 
     use super::*;
 
-    pub fn student(deps: Deps, address: String) -> StdResult<GetCountResponse> {
-        let _state = STATE.load(deps.storage)?;
+    pub fn count(deps: Deps, address: String) -> StdResult<GetCounterResponse> {
+        let state = STATE.load(deps.storage)?;
 
         let r = deps
             .querier
@@ -86,6 +91,9 @@ pub mod query {
             )
             .unwrap();
 
-        Ok(GetCountResponse { count: r.count })
+        Ok(GetCounterResponse {
+            count_counter1: state.count,
+            count_counter2: r.count,
+        })
     }
 }

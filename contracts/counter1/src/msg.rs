@@ -12,12 +12,13 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     // GetCount returns the current count as a json-encoded number
-    #[returns(GetcountResponse)]
+    #[returns(GetCounterResponse)]
     GetCount { address: String },
 }
 
 // We define a custom struct for each query response
 #[cw_serde]
-pub struct GetcountResponse {
-    pub count: i32,
+pub struct GetCounterResponse {
+    pub count_counter1: i32,
+    pub count_counter2: i32,
 }
