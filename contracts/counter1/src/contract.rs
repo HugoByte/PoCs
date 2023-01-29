@@ -55,6 +55,7 @@ pub mod execute {
             Ok(state)
         })?;
 
+        // Create a Cosmos message to execute messages in counter2 contract
         let action: CosmosMsg<_> = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: contract_address,
             msg: to_binary(&counter2::msg::ExecuteMsg::Increment {}).unwrap(),
@@ -62,7 +63,7 @@ pub mod execute {
         });
 
         Ok(Response::new()
-            .add_attribute("action", "reset")
+            .add_attribute("action", "increment")
             .add_message(action))
     }
 }
@@ -83,6 +84,7 @@ pub mod query {
     pub fn count(deps: Deps, address: String) -> StdResult<GetCounterResponse> {
         let state = STATE.load(deps.storage)?;
 
+        // Querying Contract2 result using querier
         let r = deps
             .querier
             .query_wasm_smart::<counter2::msg::GetCountResponse>(
