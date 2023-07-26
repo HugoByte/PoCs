@@ -1,0 +1,143 @@
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "io_bazel_rules_go",
+    sha256 = "6dc2da7ab4cf5d7bfc7c949776b1b7c733f05e56edc4bcd9022bb249d2e2a996",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.39.1/rules_go-v0.39.1.zip",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.39.1/rules_go-v0.39.1.zip",
+    ],
+)
+
+http_archive(
+    name = "bazel_gazelle",
+    sha256 = "727f3e4edd96ea20c29e8c2ca9e8d2af724d8c7778e7923a854b2c80952bc405",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-gazelle/releases/download/v0.30.0/bazel-gazelle-v0.30.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-gazelle/releases/download/v0.30.0/bazel-gazelle-v0.30.0.tar.gz",
+    ],
+)
+
+
+load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+
+
+go_rules_dependencies()
+
+go_register_toolchains(version = "1.20.5")
+
+gazelle_dependencies()
+
+http_archive(
+    name = "apple_rules_lint",
+    strip_prefix = "apple_rules_lint-0.3.2",
+    sha256 = "7c3cc45a95e3ef6fbc484a4234789a027e11519f454df63cbb963ac499f103f9",
+    url = "https://github.com/apple/apple_rules_lint/archive/refs/tags/0.3.2.tar.gz",
+)
+
+load("@apple_rules_lint//lint:repositories.bzl", "lint_deps")
+
+lint_deps()
+
+load("@apple_rules_lint//lint:setup.bzl", "lint_setup")
+
+lint_setup({
+  # Note: this is an example config!
+  "java-checkstyle": "@contrib_rules_jvm//java:checkstyle-default-config",
+  "java-pmd": "@contrib_rules_jvm//java:pmd-config",
+  "java-spotbugs": "@contrib_rules_jvm//java:spotbugs-default-config",
+})
+
+http_archive(
+    name = "contrib_rules_jvm",
+    sha256 = "9082d3fb20724c683cd7f909cff2711a5d40fd8529a40247f879e14aa917a8b4",
+    strip_prefix = "rules_jvm-0.17.0",
+    url = "https://github.com/bazel-contrib/rules_jvm/releases/download/v0.17.0/rules_jvm-v0.17.0.tar.gz",
+)
+
+load("@contrib_rules_jvm//:repositories.bzl", "contrib_rules_jvm_deps", "contrib_rules_jvm_gazelle_deps",)
+
+contrib_rules_jvm_deps()
+
+contrib_rules_jvm_gazelle_deps()
+
+load("@contrib_rules_jvm//:setup.bzl", "contrib_rules_jvm_setup")
+
+contrib_rules_jvm_setup()
+
+load("@contrib_rules_jvm//:gazelle_setup.bzl", "contrib_rules_jvm_gazelle_setup")
+
+contrib_rules_jvm_gazelle_setup()
+
+
+http_archive(
+    name = "rules_python",
+    sha256 = "0a8003b044294d7840ac7d9d73eef05d6ceb682d7516781a4ec62eeb34702578",
+    strip_prefix = "rules_python-0.24.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.24.0/rules_python-0.24.0.tar.gz",
+)
+
+load("@rules_python//python:repositories.bzl", "py_repositories","python_register_toolchains")
+
+py_repositories()
+
+python_register_toolchains(
+    name = "python39",
+    python_version = "3.9",
+)
+
+http_archive(
+    name = "rules_python_gazelle_plugin",
+    sha256 = "0a8003b044294d7840ac7d9d73eef05d6ceb682d7516781a4ec62eeb34702578",
+    strip_prefix = "rules_python-0.24.0/gazelle",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/0.24.0/rules_python-0.24.0.tar.gz",
+)
+
+# To compile the rules_python gazelle extension from source,
+# we must fetch some third-party go dependencies that it uses.
+
+load("@rules_python_gazelle_plugin//:deps.bzl", _py_gazelle_deps = "gazelle_deps")
+
+_py_gazelle_deps()
+
+http_archive(
+    name = "com_google_protobuf",
+    sha256 = "a79d19dcdf9139fa4b81206e318e33d245c4c9da1ffed21c87288ed4380426f9",
+    strip_prefix = "protobuf-3.11.4",
+    # latest, as of 2020-02-21
+    urls = [
+        "https://mirror.bazel.build/github.com/protocolbuffers/protobuf/archive/v3.11.4.tar.gz",
+        "https://github.com/protocolbuffers/protobuf/archive/v3.11.4.tar.gz",
+    ],
+)
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+protobuf_deps()
+
+load("@rules_jvm_external//:defs.bzl", "maven_install")
+
+maven_install(
+   
+      artifacts = [
+        "foundation.icon:javaee-scorex:0.5.4.1",
+        "foundation.icon:javaee-score-client:0.10.3",
+        "foundation.icon:btp2-lib:0.8.0",
+        "foundation.icon:javaee-annotation-processor:0.9.0",
+        "org.junit.jupiter:junit-jupiter:5.9.3",
+        "org.junit:junit-launcher:5.0.0-ALPHA",
+        "org.junit.jupiter:junit-jupiter-api:5.9.3",
+        "org.junit.jupiter:junit-jupiter-engine:5.9.3",
+        "org.junit.jupiter:junit-jupiter-params:5.9.3"
+      ],
+      fetch_sources = True,
+     repositories = [
+        "https://repo1.maven.org/maven2",
+    ],
+    maven_install_json = "//:maven_install.json",
+)
+
+load("@maven//:defs.bzl", "pinned_maven_install")
+pinned_maven_install()
+
