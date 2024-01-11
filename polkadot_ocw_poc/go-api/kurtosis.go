@@ -17,8 +17,11 @@ func KurtosisCall(config Node) enclaves.StarlarkRunMultilineOutput {
 		panic(err)
 	}
 
-	param := fmt.Sprintf(`{ "chain_type": "%s", "chain_name": "%s", "relay_nodes": %v }`, config.ChainType, config.Relaychain.Name, config.Relaychain.Nodes)
-
+	param := fmt.Sprintf(`{ "relaychain": {
+		"name" : %s ,
+		"nodes": %v
+	} }`, config.Relaychain.Name, config.Relaychain.Nodes)
+	
 	fmt.Println(param)
 
 	star_config := GetStarlarkRunConfig(param, "/relaychain/relay-chain.star", "start_relay_chains_local")
