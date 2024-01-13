@@ -1,251 +1,213 @@
+//! # Template Pallet
+//!
+//! A pallet with minimal functionality to help developers understand the essential components of
+//! writing a FRAME pallet. It is typically used in beginner tutorials or in Substrate template
+//! nodes as a starting point for creating a new pallet and **not meant to be used in production**.
+//!
+//! ## Overview
+//!
+//! This template pallet contains basic examples of:
+//! - declaring a storage item that stores a single `u32` value
+//! - declaring and using events
+//! - declaring and using errors
+//! - a dispatchable function that allows a user to set a new value to storage and emits an event
+//!   upon success
+//! - another dispatchable function that causes a custom error to be thrown
+//!
+//! Each pallet section is annotated with an attribute using the `#[pallet::...]` procedural macro.
+//! This macro generates the necessary code for a pallet to be aggregated into a FRAME runtime.
+//!
+//! Learn more about FRAME macros [here](https://docs.substrate.io/reference/frame-macros/).
+//!
+//! ### Pallet Sections
+//!
+//! The pallet sections in this template are:
+//!
+//! - A **configuration trait** that defines the types and parameters which the pallet depends on
+//!   (denoted by the `#[pallet::config]` attribute). See: [`Config`].
+//! - A **means to store pallet-specific data** (denoted by the `#[pallet::storage]` attribute).
+//!   See: [`storage_types`].
+//! - A **declaration of the events** this pallet emits (denoted by the `#[pallet::event]`
+//!   attribute). See: [`Event`].
+//! - A **declaration of the errors** that this pallet can throw (denoted by the `#[pallet::error]`
+//!   attribute). See: [`Error`].
+//! - A **set of dispatchable functions** that define the pallet's functionality (denoted by the
+//!   `#[pallet::call]` attribute). See: [`dispatchables`].
+//!
+//! Run `cargo doc --package pallet-template --open` to view this pallet's documentation.
+
+// We make sure this pallet uses `no_std` for compiling to Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(unused_imports)]
-#![allow(unused_must_use)]
 
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://docs.substrate.io/reference/frame-pallets/>
+// Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
-use sp_core::crypto::KeyTypeId;
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 
-pub mod crypto {
-	use super::KEY_TYPE;
+pub mod kurtosis;
 
-	use sp_runtime::{
-		app_crypto::{app_crypto, sr25519},
-		MultiSignature, MultiSigner,
-	};
-	app_crypto!(sr25519, KEY_TYPE);
+// FRAME pallets require their own "mock runtimes" to be able to run unit tests. This module
+// contains a mock runtime specific for testing this pallet's functionality.
+#[cfg(test)]
+mod mock;
 
-	pub struct TestAuthId;
+// This module contains the unit tests for this pallet.
+// Learn about pallet unit testing here: https://docs.substrate.io/test/unit-testing/
+#[cfg(test)]
+mod tests;
 
-	// implemented for runtime
-	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
-		type RuntimeAppPublic = Public;
-		type GenericSignature = sp_core::sr25519::Signature;
-		type GenericPublic = sp_core::sr25519::Public;
-	}
-}
+// Every callable function or "dispatchable" a pallet exposes must have weight values that correctly
+// estimate a dispatchable's execution time. The benchmarking module is used to calculate weights
+// for each dispatchable and generates this pallet's weight.rs file. Learn more about benchmarking here: https://docs.substrate.io/test/benchmark/
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
 
+// All pallet logic is defined in its own module and must be annotated by the `pallet` attribute.
 #[frame_support::pallet]
 pub mod pallet {
+	// Import various useful types required by all FRAME pallets.
 	use super::*;
-	use frame_support::dispatch::Vec;
-	use sp_runtime::offchain::{http, storage::StorageValueRef, Duration};
-
-	use frame_support::{pallet_prelude::*, traits::IsType};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct ChainDetails {
-		network_type: String,
-		chain: String,
-		nodes: Vec<NodeDetails>,
-	}
-
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct NodeDetails {
-		node_name: String,
-		node_type: String,
-	}
-
+	// The `Pallet` struct serves as a placeholder to implement traits, methods and dispatchables
+	// (`Call`s) in this pallet.
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	use frame_system::offchain::AppCrypto;
-
+	/// The pallet's configuration trait.
+	///
+	/// All our types and constants a pallet depends on must be declared here.
+	/// These types are defined generically and made concrete when the pallet is declared in the
+	/// `runtime/src/lib.rs` file of your chain.
 	#[pallet::config]
-	pub trait Config:
-		frame_system::offchain::CreateSignedTransaction<Call<Self>> + frame_system::Config
-	{
+	pub trait Config: frame_system::Config {
+		/// The overarching runtime event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-
-		#[pallet::constant]
-		type MaxPings: Get<u32>;
+		/// A type representing the weights required by the dispatchables of this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
+	/// A storage item for this pallet.
+	///
+	/// In this template, we are declaring a storage item called `Something` that stores a single
+	/// `u32` value. Learn more about runtime storage here: <https://docs.substrate.io/build/runtime-storage/>
+	/// The [`getter`] macro generates a function to conveniently retrieve the value from storage.
+	#[pallet::storage]
+	#[pallet::getter(fn something)]
+	pub type Something<T> = StorageValue<_, u32>;
+
+	/// Events that functions in this pallet can emit.
+	///
+	/// Events are a simple means of indicating to the outside world (such as dApps, chain explorers
+	/// or other users) that some notable update in the runtime has occurred. In a FRAME pallet, the
+	/// documentation for each event field and its parameters is added to a node's metadata so it
+	/// can be used by external interfaces or tools.
+	///
+	///	The `generate_deposit` macro generates a function on `Pallet` called `deposit_event` which
+	/// will convert the event type of your pallet into `RuntimeEvent` (declared in the pallet's
+	/// [`Config`] trait) and deposit it using [`frame_system::Pallet::deposit_event`].
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Pinged { who: T::AccountId, claim: u32 },
-		DeployNode(ChainDetails),
+		/// A user has successfully set a new value.
+		SomethingStored {
+			/// The new value set.
+			something: u32,
+			/// The account who set the new value.
+			who: T::AccountId,
+		},
 	}
 
+	/// Errors that can be returned by this pallet.
+	///
+	/// Errors tell users that something went wrong so it's important that their naming is
+	/// informative. Similar to events, error documentation is added to a node's metadata so it's
+	/// equally important that they have helpful documentation associated with them.
+	///
+	/// This type of runtime error can be up to 4 bytes in size should you want to return additional
+	/// information.
 	#[pallet::error]
 	pub enum Error<T> {
-		HttpFetchingError,
+		/// The value retrieved was `None` as no value was previously set.
+		NoneValue,
+		/// There was an attempt to increment the value in storage over `u32::MAX`.
+		StorageOverflow,
 	}
 
-
-	#[derive(Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-	pub struct Ping(pub u32);
-
-	#[pallet::storage]
-	#[pallet::getter(fn pings)]
-	pub(super) type Pings<T: Config> = StorageValue<_, BoundedVec<Ping, T::MaxPings>, ValueQuery>;
-
+	/// The pallet's dispatchable functions ([`Call`]s).
+	///
+	/// Dispatchable functions allows users to interact with the pallet and invoke state changes.
+	/// These functions materialize as "extrinsics", which are often compared to transactions.
+	/// They must always return a `DispatchResult` and be annotated with a weight and call index.
+	///
+	/// The [`call_index`] macro is used to explicitly
+	/// define an index for calls in the [`Call`] enum. This is useful for pallets that may
+	/// introduce new dispatchables over time. If the order of a dispatchable changes, its index
+	/// will also change which will break backwards compatibility.
+	///
+	/// The [`weight`] macro is used to assign a weight to each call.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// An example dispatchable that takes a single u32 value as a parameter, writes the value
+		/// to storage and emits an event.
+		///
+		/// It checks that the _origin_ for this call is _Signed_ and returns a dispatch
+		/// error if it isn't. Learn more about origins here: <https://docs.substrate.io/build/origins/>
+		#[pallet::call_index(0)]
+		#[pallet::weight(T::WeightInfo::do_something())]
+		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
+			// Check that the extrinsic was signed and get the signer.
+			let who = ensure_signed(origin)?;
 
-		#[pallet::weight(0)]
+			// Update storage.
+			Something::<T>::put(something);
+
+			// Emit an event.
+			Self::deposit_event(Event::SomethingStored { something, who });
+
+			// Return a successful `DispatchResult`
+			Ok(())
+		}
+
+		/// An example dispatchable that may throw a custom error.
+		///
+		/// It checks that the caller is a signed origin and reads the current value from the
+		/// `Something` storage item. If a current value exists, it is incremented by 1 and then
+		/// written back to storage.
+		///
+		/// ## Errors
+		///
+		/// The function will return an error under the following conditions:
+		///
+		/// - If no value has been set ([`Error::NoneValue`])
+		/// - If incrementing the value in storage causes an arithmetic overflow
+		///   ([`Error::StorageOverflow`])
 		#[pallet::call_index(1)]
-		pub fn increment_ping(origin: OriginFor<T>, claim: u32) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
+		#[pallet::weight(T::WeightInfo::cause_error())]
+		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
 
-			let mut a = Pings::<T>::get();
-			a.try_push(Ping(claim));
-
-			Pings::<T>::set(a);
-			Self::deposit_event(Event::Pinged { who: sender, claim });
-
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		#[pallet::call_index(2)]
-		pub fn node_deploy(origin: OriginFor<T>, node_details: ChainDetails) -> DispatchResult {
-			let _sender = ensure_signed(origin)?;
-
-			Self::deposit_event(Event::DeployNode(node_details));
-
-			Ok(())
+			// Read a value from storage.
+			match Pallet::<T>::something() {
+				// Return an error if the value has not been set.
+				None => Err(Error::<T>::NoneValue.into()),
+				Some(old) => {
+					// Increment the value read from storage. This will cause an error in the event
+					// of overflow.
+					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
+					// Update the value in storage with the incremented result.
+					Something::<T>::put(new);
+					Ok(())
+				},
+			}
 		}
 	}
 
-	use frame_system::offchain::Signer;
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
-	where
-		<T as frame_system::Config>::RuntimeEvent: From<pallet::Event<T>>,
-		<T as frame_system::Config>::RuntimeEvent: TryInto<pallet::Event<T>>,
-	{
-		/// Offchain worker entry point.
-		fn offchain_worker(block_number: BlockNumberFor<T>) {
-			log::info!("Hello from pallet-ocw");
-			// let asd = frame_system::Pallet::<T>::read_events_no_consensus();
-			for (index, event) in frame_system::Pallet::<T>::read_events_no_consensus().enumerate()
-			{
-				log::info!("{:?}", index);
-				if let Ok(Event::<T>::DeployNode(chain)) = event.event.try_into() {
-					let mut nodes = vec![];
-					use serde::Serialize;
-					#[derive(Serialize, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-					pub struct Node {
-						name: String,
-						node_type: String,
-						prometheus: bool,
-					}
-
-					for i in chain.nodes.iter() {
-						// let temp = format!(
-						// 	r#"{{"name": "{}", "node_type": "{}" , "prometheus": false}}"#,
-						// 	i.node_name, i.node_type
-						// );
-						let node = Node{
-							name: i.node_name.clone(),
-							node_type: i.node_type.clone(),
-							prometheus: false,
-						};
-						nodes.push(node);
-					}
-
-					let node = serde_json::to_string(&nodes).unwrap();
-
-					let config = format!(
-						r#"{{ "chain_type": "{}",
-						"relaychain": {{
-						  "name": "{}",
-						  "nodes": {:?}
-						}},
-						"para": [],
-						"explorer": true
-					  }}"#,
-						chain.network_type,chain.chain, node
-					);
-
-					log::info!("{:?}", config);
-					match Self::post_kurtosis(config) {
-						Ok(kurtosis) => log::info!("{:?}", kurtosis),
-						Err(x) => log::error!("Error: {:?}", x),
-					}
-				}
-			}
-		}
-	}
-
-	use codec::alloc::string::ToString;
-	use frame_system::offchain::*;
-	use scale_info::prelude::string::String;
-	use scale_info::prelude::vec;
-	use scale_info::prelude::format;
-	use serde_json::Value;
-
-	impl<T: Config> Pallet<T>
-	where
-		<T as frame_system::Config>::RuntimeEvent: From<pallet::Event<T>>,
-		<T as frame_system::Config>::RuntimeEvent: TryInto<pallet::Event<T>>,
-	{
-
-		fn get_kurtosis() -> Result<String, http::Error> {
-			let request = http::Request::get("http://127.0.0.1:8080/items");
-
-			let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(240000));
-
-			let pending = request.deadline(timeout).send().map_err(|e| {
-				log::error!("11 {:?}", e);
-				http::Error::IoError
-			})?;
-
-			let response = pending.try_wait(timeout).map_err(|e| {
-				log::error!("25 {:?}", e);
-				http::Error::IoError
-			})??;
-
-			if response.code != 200 {
-				log::error!("Unexpected http request status code: {}", response.code);
-			}
-			log::info!("{:?}", response.body().clone().collect::<Vec<u8>>());
-			let body = response.body().collect::<Vec<u8>>();
-			let body_str = String::from_utf8_lossy(&body);
-
-			Ok(body_str.to_string())
-		}
-
-		fn post_kurtosis(config: String) -> Result<(), http::Error> {
-			let body = config.as_bytes();
-			let request = http::Request::post("http://127.0.0.1:8080/spawn", vec![body]);
-
-			let timeout = sp_io::offchain::timestamp().add(Duration::from_millis(240000));
-
-			let pending = request.deadline(timeout)
-				.send().map_err(|e| {
-				log::error!("11 {:?}", e);
-				http::Error::IoError
-			})?;
-
-			let response = pending.try_wait(timeout).map_err(|e| {
-				log::error!("25 {:?}", e);
-				http::Error::IoError
-			})??;
-
-			if response.code != 200 {
-				log::error!("Unexpected http request status code: {}", response.code);
-			}
-			log::info!("{:?}", response.body().clone().collect::<Vec<u8>>());
-			let body = response.body().collect::<Vec<u8>>();
-
-			// let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
-			// 	log::warn!("No UTF8 body");
-			// 	http::Error::Unknown
-			// })?;
-			// let body_str: ChainDetails = ChainDetails::decode(&mut &body[..]).unwrap();
-			let body_str = String::from_utf8_lossy(&body);
-			// let res = serde_json::from_slice::<String>(&body);
-			log::info!("hello {:?}", body_str);
-
-			Ok(())
-		}
-	}
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn offchain_worker(block_number: BlockNumberFor<T>) {
+            log::info!("Hello from pallet-ocw.");
+        }
+    }
 }
