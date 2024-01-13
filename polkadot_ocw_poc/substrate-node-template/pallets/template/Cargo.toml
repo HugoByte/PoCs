@@ -21,6 +21,11 @@ frame-benchmarking = { version = "4.0.0-dev", git = "https://github.com/parityte
 frame-support = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 frame-system = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 sp-std = { version = "8.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
+
+sp-core = { version = "21.0.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+sp-runtime-interface = { version = "17.0.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+sp-externalities = { version = "0.19.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0"  }
+
 log = { version = "0.4.17", default-features = false }
 tokio = { version = "1", features = ["full"], optional = true }
 kurtosis-sdk = { version = "0.86.4" }
@@ -44,7 +49,9 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-externalities/std",
 	"log/std",
+	"tokio"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

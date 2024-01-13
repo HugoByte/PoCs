@@ -59,8 +59,14 @@ impl KurtosisClient {
 				let mut engine_lock = engine_clone.lock().await;
 				if let KurtosisEngineState::Pending(ref mut future) = *engine_lock {
 					match future.as_mut().await {
-						Ok(client) => *engine_lock = KurtosisEngineState::Ready(client),
-						Err(e) => *engine_lock = KurtosisEngineState::Failed(e),
+						Ok(client) => *engine_lock = {
+							log::error!("Kurtosis client is ready");
+							KurtosisEngineState::Ready(client)
+						},
+						Err(e) => *engine_lock = { 
+							log::error!("Kurtosis client failed to initialize: {:?}", e);
+							KurtosisEngineState::Failed(e)
+						},
 					}
 				}
 			}),
