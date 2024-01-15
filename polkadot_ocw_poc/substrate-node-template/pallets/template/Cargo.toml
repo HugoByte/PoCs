@@ -22,20 +22,20 @@ frame-support = { version = "4.0.0-dev", git = "https://github.com/paritytech/po
 frame-system = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 sp-std = { version = "8.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
-sp-core = { version = "21.0.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sp-runtime-interface = { version = "17.0.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sp-externalities = { version = "0.19.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0"  }
 
 log = { version = "0.4.17", default-features = false }
-tokio = { version = "1", features = ["full"], optional = true }
-kurtosis-sdk = { version = "0.86.4" }
-tonic = { version = "0.9.2" }
-futures = "0.3.28"
+tokio = { version = "1", default-features = false, optional = true }
+kurtosis-sdk = { version = "0.86.4", optional = true }
+tonic = { version = "0.9.2", default-features = false, optional = true }
+futures = { version = "0.3.28", default-features = false }
+sp-core = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
 [dev-dependencies]
-sp-core = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
-sp-io = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
-sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+
 
 [features]
 default = ["std"]
@@ -51,7 +51,9 @@ std = [
 	"sp-std/std",
 	"sp-externalities/std",
 	"log/std",
-	"tokio"
+	"tokio",
+	"kurtosis-sdk",
+	"tonic"
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

@@ -5139,7 +5139,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "node-template-runtime",
- "pallet-template 4.0.0-dev",
+ "pallet-template",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -5188,7 +5188,7 @@ dependencies = [
  "pallet-balances",
  "pallet-grandpa",
  "pallet-sudo",
- "pallet-template 4.0.0-dev (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
+ "pallet-template",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -5529,19 +5529,6 @@ dependencies = [
  "sp-std 8.0.0 (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
  "tokio",
  "tonic",
-]
-
-[[package]]
-name = "pallet-template"
-version = "4.0.0-dev"
-source = "git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0#a3dc2f15f23b3fd25ada62917bfab169a01f2b0d"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-std 8.0.0 (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
 ]
 
 [[package]]
