@@ -36,12 +36,6 @@ where
 		self.deny_unsafe.check_if_safe()?;
 		let account = account.clone();
 
-		let hex_representation: String = PENDING_AUTHORIZED_NODES_STORAGE
-			.iter()
-			.map(|b| format!("{:02x}", b))
-			.collect();
-		println!("Hex representation: {}", hex_representation);
-
 		let mut pending_authorized_nodes: Vec<AccountId> = self
 			.storage
 			.read()
