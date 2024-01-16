@@ -5140,6 +5140,7 @@ dependencies = [
  "jsonrpsee",
  "node-template-runtime",
  "pallet-template",
+ "pallet-template-rpc",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -5166,6 +5167,7 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-keyring",
+ "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
  "substrate-build-script-utils",
@@ -5184,6 +5186,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
+ "log",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
@@ -5529,6 +5532,24 @@ dependencies = [
  "sp-std 8.0.0 (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
  "tokio",
  "tonic",
+]
+
+[[package]]
+name = "pallet-template-rpc"
+version = "1.0.0"
+dependencies = [
+ "jsonrpsee",
+ "pallet-template",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sc-rpc-api",
+ "sc-transaction-pool-api",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-keystore",
+ "sp-offchain",
+ "sp-runtime",
 ]
 
 [[package]]

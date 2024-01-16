@@ -1,7 +1,7 @@
 use frame_support::traits::IsType;
 
 #[cfg(feature = "std")]
-use futures::{lock::Mutex, Future, FutureExt, TryFutureExt};
+use futures::{lock::Mutex, lock::MutexGuard, Future, FutureExt, TryFutureExt};
 
 #[cfg(feature = "std")]
 use kurtosis_sdk::{
@@ -17,6 +17,9 @@ use sp_core::traits::SpawnNamed;
 
 #[cfg(feature = "std")]
 use sp_externalities::ExternalitiesExt;
+
+#[cfg(feature = "std")]
+use tokio::sync::Notify;
 
 use core::{future::IntoFuture, pin::Pin};
 use sp_runtime_interface::runtime_interface;
@@ -38,12 +41,13 @@ pub enum KurtosisEngineState {
 			>,
 		>,
 	),
-	Ready(EngineServiceClient<tonic::transport::Channel>),
+	Ready(Arc<EngineServiceClient<tonic::transport::Channel>>),
 }
 
 #[cfg(feature = "std")]
 pub struct KurtosisClient {
-	pub engine: Arc<Mutex<KurtosisEngineState>>,
+	engine: Arc<Mutex<KurtosisEngineState>>,
+	state_changed: Arc<Notify>,
 }
 
 #[cfg(feature = "std")]
@@ -53,11 +57,14 @@ impl KurtosisClient {
 
 		Arc::new(Self {
 			engine: Arc::new(Mutex::new(KurtosisEngineState::Pending(Box::pin(future)))),
+			state_changed: Arc::new(Notify::new()),
 		})
 	}
 
 	pub fn initialize(&self, spawner: impl SpawnNamed + 'static) {
 		let engine_clone = self.engine.clone();
+		let state_changed = self.state_changed.clone();
+
 		log::info!("Kurtosis client is initializing.");
 		spawner.spawn(
 			"kurtosis-engine-init",
@@ -69,7 +76,7 @@ impl KurtosisClient {
 						Ok(client) =>
 							*engine_lock = {
 								log::error!("Kurtosis client is ready");
-								KurtosisEngineState::Ready(client)
+								KurtosisEngineState::Ready(Arc::new(client))
 							},
 						Err(e) =>
 							*engine_lock = {
@@ -78,8 +85,41 @@ impl KurtosisClient {
 							},
 					}
 				}
+
+				state_changed.notify_one()
 			}),
 		);
+	}
+
+	pub async fn with_engine<F, T>(&self, f: F) -> Result<T, String>
+	where
+		F: FnOnce(&EngineServiceClient<tonic::transport::Channel>) -> T,
+	{
+		let engine_state = self.engine.lock().await;
+		loop {
+			match &*engine_state {
+				KurtosisEngineState::Ready(client) => break Ok(f(&*client)),
+				KurtosisEngineState::Pending(_) => self.state_changed.notified().await,
+				KurtosisEngineState::Failed(reason) => break Err(reason.to_string()),
+			}
+		}
+	}
+
+	pub async fn with_engine_mut<F, T>(&mut self, f: F) -> Result<T, String>
+	where
+		F: FnOnce(&mut EngineServiceClient<tonic::transport::Channel>) -> T,
+	{
+		let mut engine_state = self.engine.lock().await;
+		loop {
+			match &mut *engine_state {
+				KurtosisEngineState::Ready(client) =>
+					if let Some(client_mut) = Arc::get_mut(client) {
+						break Ok(f(client_mut))
+					},
+				KurtosisEngineState::Pending(_) => self.state_changed.notified().await,
+				KurtosisEngineState::Failed(reason) => break Err(reason.to_string()),
+			}
+		}
 	}
 }
 
@@ -103,55 +143,28 @@ def main(plan):
     plan.print('Hello World!')
 ";
 
-// #[cfg(feature = "std")]
-// async fn deploy(engine: &mut EngineServiceClient<tonic::transport::Channel>) {
-// 	let create_enclave_response = engine
-// 		.create_enclave(CreateEnclaveArgs {
-// 			enclave_name: "my-rust-test".to_string(),
-// 			api_container_log_level: "info".to_string(),
-// 			// Default
-// 			api_container_version_tag: "".to_string(),
-// 			is_partitioning_enabled: false,
-// 		})
-// 		.await?
-// 		.into_inner();
-
-// 	log::info!("from tokio before sleep");
-// 	tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-// 	log::info!("from tokio after sleep");
-// }
-
 #[runtime_interface]
 pub trait Kurtosis {
-	// fn call_async(&mut self) {
-	// 	if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
-	// 		let engine_lock = kurtosis_ext.0.engine.clone();
-	// 		let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+	fn create_enclave(&mut self) {
+		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
+			let engine_lock = kurtosis_ext.0.engine.clone();
+			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
-	// 		rt.block_on(async {
-	// 			let engine_state = engine_lock.lock().await;
-	// 			match &*engine_state {
-	// 				KurtosisEngineState::Ready(client) => {
-	// 					log::info!("Kurtosis client is ready.");
-	// 				},
-	// 				KurtosisEngineState::Pending(_) => {
-	// 					log::warn!("Kurtosis client is still pending.");
-	// 				},
-	// 				KurtosisEngineState::Failed(e) => {
-	// 					log::error!("Kurtosis client failed: {:?}", e);
-	// 				},
-	// 			}
-	// 		});
-	// 	} else {
-	// 		log::error!("KurtosisExt not found in externalities");
-	// 	}
-	// }
-	// fn engine(&mut self) -> Option<Box<EngineServiceClient<tonic::transport::Channel>>> {}
+			rt.block_on(async {
+				let result = kurtosis_ext
+					.0
+					.with_engine(|client| {
+						log::info!("Kurtosis client is ready.");
+					})
+					.await;
 
-	// fn call_async(&mut self) {
-	// 	if let Some(mut engine) = self.extension::<KurtosisExt>().map(|ext| ext.0) {
-	// 		let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-	// 		rt.block_on(deploy(&mut engine));
-	// 	}
-	// }
+				match result {
+					Ok(_) => log::info!("Enclave created successfully"),
+					Err(e) => log::error!("Failed to create enclave: {}", e),
+				}
+			});
+		} else {
+			log::error!("KurtosisExt not found in externalities");
+		}
+	}
 }

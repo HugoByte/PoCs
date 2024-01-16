@@ -13,22 +13,23 @@ use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-
 pub use sc_rpc_api::DenyUnsafe;
+use sp_core::offchain::OffchainStorage;
 
 /// Full client dependencies.
-pub struct FullDeps<C, P> {
+pub struct FullDeps<C, P, S> {
 	/// The client instance to use.
 	pub client: Arc<C>,
 	/// Transaction pool instance.
 	pub pool: Arc<P>,
+	pub offchain_storage: S,
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
 }
 
 /// Instantiate all full RPC extensions.
-pub fn create_full<C, P>(
-	deps: FullDeps<C, P>,
+pub fn create_full<C, P, S>(
+	deps: FullDeps<C, P, S>,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>,
@@ -38,15 +39,18 @@ where
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
+	S: OffchainStorage + 'static,
 {
+	use pallet_template_rpc::{TemplateApiServer, TemplateImpl};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
 	use substrate_frame_rpc_system::{System, SystemApiServer};
 
 	let mut module = RpcModule::new(());
-	let FullDeps { client, pool, deny_unsafe } = deps;
+	let FullDeps { client, pool, offchain_storage, deny_unsafe } = deps;
 
-	module.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
-	module.merge(TransactionPayment::new(client).into_rpc())?;
+	module.merge(System::new(client.clone(), pool.clone(), deny_unsafe.clone()).into_rpc())?;
+	module.merge(TransactionPayment::new(client.clone()).into_rpc())?;
+	module.merge(<TemplateImpl<S> as TemplateApiServer<AccountId>>::into_rpc(TemplateImpl::new(offchain_storage, deny_unsafe)))?;
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed

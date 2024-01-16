@@ -1,12 +1,21 @@
 use sc_cli::RunCmd;
 
 #[derive(Debug, clap::Parser)]
+pub struct ExtendedRunCmd {
+    #[clap(flatten)]
+    pub base: RunCmd,
+
+	#[clap(long = "provider-url", value_name = "PROVIDER_URL")]
+    pub provider_url: Option<String>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub struct Cli {
 	#[command(subcommand)]
 	pub subcommand: Option<Subcommand>,
 
-	#[clap(flatten)]
-	pub run: RunCmd,
+    #[clap(flatten)]
+    pub run: ExtendedRunCmd,
 }
 
 #[derive(Debug, clap::Subcommand)]
