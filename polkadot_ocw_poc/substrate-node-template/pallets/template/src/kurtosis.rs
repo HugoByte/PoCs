@@ -1,7 +1,10 @@
 use frame_support::traits::IsType;
 
 #[cfg(feature = "std")]
-use futures::{lock::Mutex, lock::MutexGuard, Future, FutureExt, TryFutureExt};
+use futures::{
+	lock::{MappedMutexGuard, Mutex, MutexGuard},
+	Future, FutureExt, TryFutureExt,
+};
 
 #[cfg(feature = "std")]
 use kurtosis_sdk::{
@@ -41,7 +44,8 @@ pub enum KurtosisEngineState {
 			>,
 		>,
 	),
-	Ready(Arc<EngineServiceClient<tonic::transport::Channel>>),
+	Ready(EngineServiceClient<tonic::transport::Channel>),
+	Uninitialized,
 }
 
 #[cfg(feature = "std")]
@@ -76,7 +80,7 @@ impl KurtosisClient {
 						Ok(client) =>
 							*engine_lock = {
 								log::error!("Kurtosis client is ready");
-								KurtosisEngineState::Ready(Arc::new(client))
+								KurtosisEngineState::Ready(client)
 							},
 						Err(e) =>
 							*engine_lock = {
@@ -91,31 +95,16 @@ impl KurtosisClient {
 		);
 	}
 
-	pub async fn with_engine<F, T>(&self, f: F) -> Result<T, String>
+	async fn with_engine<F, T>(&self, f: F) -> Result<T, String>
 	where
-		F: FnOnce(&EngineServiceClient<tonic::transport::Channel>) -> T,
+		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> T,
 	{
 		let engine_state = self.engine.lock().await;
 		loop {
 			match &*engine_state {
-				KurtosisEngineState::Ready(client) => break Ok(f(&*client)),
-				KurtosisEngineState::Pending(_) => self.state_changed.notified().await,
-				KurtosisEngineState::Failed(reason) => break Err(reason.to_string()),
-			}
-		}
-	}
-
-	pub async fn with_engine_mut<F, T>(&mut self, f: F) -> Result<T, String>
-	where
-		F: FnOnce(&mut EngineServiceClient<tonic::transport::Channel>) -> T,
-	{
-		let mut engine_state = self.engine.lock().await;
-		loop {
-			match &mut *engine_state {
-				KurtosisEngineState::Ready(client) =>
-					if let Some(client_mut) = Arc::get_mut(client) {
-						break Ok(f(client_mut))
-					},
+				KurtosisEngineState::Uninitialized =>
+					break Err("Engine has not been initialized, probably not supported".to_string()),
+				KurtosisEngineState::Ready(client) => break Ok(f(client.to_owned())),
 				KurtosisEngineState::Pending(_) => self.state_changed.notified().await,
 				KurtosisEngineState::Failed(reason) => break Err(reason.to_string()),
 			}
@@ -138,30 +127,67 @@ impl KurtosisExt {
 #[cfg(feature = "std")]
 pub type HostFunctions = (kurtosis::HostFunctions,);
 
-const STARLARK_SCRIPT: &str = "
+const STARTUP_SCRIPT: &str = r#"
+package = import_module("https://github.com/hugobyte/polkadot-kurtosis-package/main.star")
+
 def main(plan):
-    plan.print('Hello World!')
-";
+    package.run(plan, chain_type)
+"#;
 
 #[runtime_interface]
 pub trait Kurtosis {
 	fn create_enclave(&mut self) {
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
-			let engine_lock = kurtosis_ext.0.engine.clone();
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-
 			rt.block_on(async {
-				let result = kurtosis_ext
+				let enclave_response = kurtosis_ext
 					.0
-					.with_engine(|client| {
-						log::info!("Kurtosis client is ready.");
+					.with_engine(|mut client| async move {
+						client
+							.create_enclave(CreateEnclaveArgs {
+								enclave_name: None,
+								api_container_log_level: Some("info".to_string()),
+								api_container_version_tag: None,
+								mode: Some(0),
+							})
+							.await
+							.unwrap()
 					})
+					.await
+					.unwrap()
 					.await;
 
-				match result {
-					Ok(_) => log::info!("Enclave created successfully"),
-					Err(e) => log::error!("Failed to create enclave: {}", e),
-				}
+				println!("{:?}", enclave_response);
+
+				// let enclave_port = enclave_response
+				// 	.enclave_info
+				// 	.expect("Enclave info must be present")
+				// 	.api_container_host_machine_info
+				// 	.expect("Enclave host machine info must be present")
+				// 	.grpc_port_on_host_machine;
+				// let mut enclave =
+				// 	ApiContainerServiceClient::connect(format!("https://[::1]:{}", enclave_port))
+				// 		.await
+				// 		.unwrap();
+
+				// let mut result = enclave
+				// 	.run_starlark_script(RunStarlarkScriptArgs {
+				// 		serialized_script: STARLARK_SCRIPT.to_string(),
+				// 		serialized_params: None,
+				// 		dry_run: Some(false),
+				// 		parallelism: None,
+				// 		main_function_name: Some("main".to_string()),
+				// 		experimental_features: vec![],
+				// 		cloud_instance_id: None,
+				// 		cloud_user_id: None,
+				// 		image_download_mode: None,
+				// 	})
+				// 	.await;
+
+				// match result {
+				// 	Ok(_) => log::info!("Enclave created successfully"),
+				// 	Err(e) => log::error!("Failed to create enclave: {}", e),
+				// }
 			});
 		} else {
 			log::error!("KurtosisExt not found in externalities");

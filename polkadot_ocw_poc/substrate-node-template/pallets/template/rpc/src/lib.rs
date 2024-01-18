@@ -5,16 +5,16 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
-use pallet_template::PENDING_AUTHORIZED_NODES_STORAGE;
+use pallet_template::{RequestId, PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE};
 use parking_lot::RwLock;
 use sc_rpc_api::DenyUnsafe;
 use sp_core::offchain::OffchainStorage;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 #[rpc(client, server)]
 pub trait TemplateApi<AccountId> {
 	#[method(name = "template_authorizeNode")]
-	fn authorize_node(&self, account: AccountId) -> RpcResult<()>;
+	fn authorize_node(&self, account: AccountId, request_id: RequestId) -> RpcResult<()>;
 }
 
 pub struct TemplateImpl<T: OffchainStorage> {
@@ -27,31 +27,30 @@ impl<T: OffchainStorage> TemplateImpl<T> {
 		Self { storage: Arc::new(RwLock::new(storage)), deny_unsafe }
 	}
 }
+
 impl<T, AccountId> TemplateApiServer<AccountId> for TemplateImpl<T>
 where
 	T: OffchainStorage + 'static,
 	AccountId: Clone + Display + Codec + Send + std::cmp::PartialEq + 'static,
 {
-	fn authorize_node(&self, account: AccountId) -> RpcResult<()> {
+	fn authorize_node(&self, account: AccountId, request_id: RequestId) -> RpcResult<()> {
 		self.deny_unsafe.check_if_safe()?;
 		let account = account.clone();
 
-		let mut pending_authorized_nodes: Vec<AccountId> = self
+		let mut pending_authorized_nodes: BTreeMap<RequestId, AccountId> = self
 			.storage
 			.read()
-			.get(sp_offchain::STORAGE_PREFIX, PENDING_AUTHORIZED_NODES_STORAGE)
+			.get(sp_offchain::STORAGE_PREFIX, PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE)
 			.and_then(|bytes| Decode::decode(&mut &bytes[..]).ok())
 			.unwrap_or_default();
 
-		if !pending_authorized_nodes.contains(&account) {
-			pending_authorized_nodes.push(account.clone());
-		}
+		pending_authorized_nodes.insert(request_id, account.clone());
 
-        let serialized = pending_authorized_nodes.encode();
+		let serialized = pending_authorized_nodes.encode();
 
 		self.storage.write().set(
 			sp_offchain::STORAGE_PREFIX,
-			PENDING_AUTHORIZED_NODES_STORAGE,
+			PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE,
 			&serialized,
 		);
 

@@ -23,7 +23,10 @@ use frame_support::{
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::{
-	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
+	offchain::{
+		testing::{self, OffchainState, TestOffchainExt},
+		OffchainWorkerExt, TransactionPoolExt, OffchainDbExt
+	},
 	sr25519::Signature,
 	H256,
 };
@@ -119,5 +122,16 @@ pub fn test_pub() -> sp_core::sr25519::Public {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
+	// Create a default genesis config
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into();
+
+	// Create and configure offchain worker externalities
+	let (offchain, _offchain_state) = TestOffchainExt::new();
+	t.ext().register_extension(OffchainWorkerExt::new(offchain));
+
+	// Optionally, you can also initialize and configure the offchain database extension
+	let (offchain_db, _offchain_db_state) = testing::TestOffchainDbExt::new();
+	t.ext().register_extension(OffchainDbExt::new(offchain_db));
+
+	t
 }

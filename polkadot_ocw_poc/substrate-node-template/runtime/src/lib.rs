@@ -257,6 +257,7 @@ impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
 	type AuthorityId = pallet_template::crypto::AuthId;
+	type MaxEnclaveCount = ConstU32<{u32::MAX}>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

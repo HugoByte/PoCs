@@ -9,7 +9,9 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpS
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use std::{sync::Arc, time::Duration};
+use sp_core::{sr25519::Public, ByteArray};
+use sp_runtime::traits::IdentifyAccount;
+use std::{ops::Index, sync::Arc, time::Duration};
 
 type HostFunctions = (sp_io::SubstrateHostFunctions, pallet_template::kurtosis::HostFunctions);
 
@@ -167,11 +169,9 @@ pub fn new_full(
 
 		if let Ok(key) = keystore_container
 			.keystore()
-			.sr25519_generate_new(pallet_template::KEY_TYPE, None)
+			.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
 		{
-			let _ = keystore_container
-				.keystore()
-				.insert(pallet_template::KEY_TYPE, "//Kurtosis", &key);
+			let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
 		};
 
 		task_manager.spawn_handle().spawn(
@@ -208,11 +208,15 @@ pub fn new_full(
 	let rpc_extensions_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
-        let offchain_storage = backend.offchain_storage().unwrap().clone();
+		let offchain_storage = backend.offchain_storage().unwrap().clone();
 
 		Box::new(move |deny_unsafe, _| {
-			let deps =
-				crate::rpc::FullDeps { client: client.clone(), pool: pool.clone(), offchain_storage: offchain_storage.clone(), deny_unsafe };
+			let deps = crate::rpc::FullDeps {
+				client: client.clone(),
+				pool: pool.clone(),
+				offchain_storage: offchain_storage.clone(),
+				deny_unsafe,
+			};
 			crate::rpc::create_full(deps).map_err(Into::into)
 		})
 	};
