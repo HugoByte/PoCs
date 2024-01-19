@@ -164,8 +164,10 @@ pub fn new_full(
 		})?;
 
 	if config.offchain_worker.enabled {
-		let kurtosis_client = pallet_template::kurtosis::KurtosisClient::new();
-		kurtosis_client.initialize(task_manager.spawn_handle());
+		let kurtosis_client = Arc::new(pallet_template::kurtosis::KurtosisClient::new_with_engine(
+			task_manager.spawn_handle(),
+		));
+		kurtosis_client.initialize();
 
 		if let Ok(key) = keystore_container
 			.keystore()
@@ -188,9 +190,9 @@ pub fn new_full(
 				network_provider: network.clone(),
 				enable_http_requests: true,
 				custom_extensions: move |_| {
-					vec![Box::new(pallet_template::kurtosis::KurtosisExt::new(
-						kurtosis_client.clone(),
-					)) as Box<_>]
+					vec![Box::new(pallet_template::kurtosis::KurtosisExt::new(Arc::new(
+						pallet_template::kurtosis::KurtosisContainer::new(kurtosis_client.clone()),
+					))) as Box<_>]
 				},
 			})
 			.run(client.clone(), task_manager.spawn_handle())

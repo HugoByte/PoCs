@@ -6,10 +6,12 @@ use futures::{
 	Future, FutureExt, TryFutureExt,
 };
 
+use kurtosis_sdk::enclave_api::RunStarlarkPackageArgs;
 #[cfg(feature = "std")]
 use kurtosis_sdk::{
 	enclave_api::{
 		api_container_service_client::ApiContainerServiceClient,
+		run_starlark_package_args::StarlarkPackageContent,
 		starlark_run_response_line::RunResponseLine::InstructionResult, RunStarlarkScriptArgs,
 	},
 	engine_api::{engine_service_client::EngineServiceClient, CreateEnclaveArgs},
@@ -26,87 +28,192 @@ use tokio::sync::Notify;
 
 use core::{future::IntoFuture, pin::Pin};
 use sp_runtime_interface::runtime_interface;
-use sp_std::{boxed::Box, sync::Arc};
+use sp_std::{any::Any, boxed::Box, sync::Arc};
 
 #[cfg(feature = "std")]
-pub enum KurtosisEngineState {
+use async_trait::async_trait;
+
+#[cfg(feature = "std")]
+pub trait KurtosisClientTrait: Any + Send + Sync {
+	fn as_any(&self) -> &dyn Any;
+}
+
+#[cfg(feature = "std")]
+pub enum KurtosisClientState<T> {
 	Failed(tonic::transport::Error),
-	Pending(
-		Pin<
-			Box<
-				dyn Future<
-						Output = Result<
-							EngineServiceClient<tonic::transport::Channel>,
-							tonic::transport::Error,
-						>,
-					> + Send
-					+ 'static,
-			>,
-		>,
-	),
-	Ready(EngineServiceClient<tonic::transport::Channel>),
+	Pending(Pin<Box<dyn Future<Output = Result<T, tonic::transport::Error>> + Send + 'static>>),
+	Ready(T),
 	Uninitialized,
 }
 
 #[cfg(feature = "std")]
-pub struct KurtosisClient {
-	engine: Arc<Mutex<KurtosisEngineState>>,
+pub struct KurtosisClient<T> {
+	client: Arc<Mutex<KurtosisClientState<T>>>,
+	spawner: Box<dyn SpawnNamed>,
 	state_changed: Arc<Notify>,
 }
 
 #[cfg(feature = "std")]
-impl KurtosisClient {
-	pub fn new() -> Arc<Self> {
-		let future = async { EngineServiceClient::connect("https://[::1]:9710").await };
+pub struct KurtosisContainer(Arc<dyn KurtosisClientTrait + Send + Sync>);
+
+#[cfg(feature = "std")]
+impl KurtosisContainer {
+	pub fn new(
+		client: Arc<impl KurtosisClientTrait + std::marker::Sync + std::marker::Send + 'static>,
+	) -> Self {
+		Self(client)
+	}
+
+	pub fn engine_service(
+		&self,
+	) -> Option<&KurtosisClient<EngineServiceClient<tonic::transport::Channel>>> {
+		self.0
+			.as_any()
+			.downcast_ref::<KurtosisClient<EngineServiceClient<tonic::transport::Channel>>>()
+	}
+
+	pub fn api_container_service(
+		&self,
+	) -> Option<&KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>>> {
+		self.0
+			.as_any()
+			.downcast_ref::<KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>>>()
+	}
+}
+
+#[cfg(feature = "std")]
+impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
+	pub fn new_with_engine(spawner: impl SpawnNamed + 'static) -> Self {
+		let future = async move { EngineServiceClient::connect("https://[::1]:9710").await };
+
+		Self {
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
+			spawner: Box::new(spawner),
+			state_changed: Arc::new(Notify::new()),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl KurtosisClientTrait for KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+}
+
+#[cfg(feature = "std")]
+impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
+	pub fn new_with_api_container(port: u32, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
+		let future = async move {
+			ApiContainerServiceClient::connect(format!("https://[::1]:{}", port)).await
+		};
 
 		Arc::new(Self {
-			engine: Arc::new(Mutex::new(KurtosisEngineState::Pending(Box::pin(future)))),
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
+			spawner: Box::new(spawner),
 			state_changed: Arc::new(Notify::new()),
 		})
 	}
+}
 
-	pub fn initialize(&self, spawner: impl SpawnNamed + 'static) {
-		let engine_clone = self.engine.clone();
+#[cfg(feature = "std")]
+impl KurtosisClientTrait for KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> KurtosisClient<T>
+where
+	T: Send + 'static,
+{
+	pub fn initialize(&self) {
+		let client_clone = self.client.clone();
 		let state_changed = self.state_changed.clone();
 
-		log::info!("Kurtosis client is initializing.");
-		spawner.spawn(
-			"kurtosis-engine-init",
+		self.spawner.spawn(
+			"kurtosis-client-init",
 			None,
 			Box::pin(async move {
-				let mut engine_lock = engine_clone.lock().await;
-				if let KurtosisEngineState::Pending(ref mut future) = *engine_lock {
-					match future.as_mut().await {
-						Ok(client) =>
-							*engine_lock = {
-								log::error!("Kurtosis client is ready");
-								KurtosisEngineState::Ready(client)
-							},
-						Err(e) =>
-							*engine_lock = {
-								log::error!("Kurtosis client failed to initialize: {:?}", e);
-								KurtosisEngineState::Failed(e)
-							},
-					}
+				log::info!("Kurtosis client is initializing.");
+				let mut client_lock = client_clone.lock().await;
+				match &mut *client_lock {
+					KurtosisClientState::Pending(ref mut future) => match future.as_mut().await {
+						Ok(client) => {
+							log::info!("Kurtosis client is ready.");
+							*client_lock = KurtosisClientState::Ready(client);
+						},
+						Err(e) => {
+							log::error!("Kurtosis client failed to initialize: {:?}", e);
+							*client_lock = KurtosisClientState::Failed(e);
+						},
+					},
+					_ => log::warn!("Kurtosis client is not in a pending state."),
 				}
 
-				state_changed.notify_one()
+				state_changed.notify_one();
 			}),
 		);
 	}
+}
 
-	async fn with_engine<F, T>(&self, f: F) -> Result<T, String>
+#[cfg(feature = "std")]
+#[async_trait]
+pub trait EngineClientTrait {
+	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
 	where
-		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> T,
+		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> U + std::marker::Send;
+}
+
+#[cfg(feature = "std")]
+#[async_trait]
+impl EngineClientTrait for KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
+	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
+	where
+		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
 	{
-		let engine_state = self.engine.lock().await;
+		let client_state = self.client.lock().await;
 		loop {
-			match &*engine_state {
-				KurtosisEngineState::Uninitialized =>
-					break Err("Engine has not been initialized, probably not supported".to_string()),
-				KurtosisEngineState::Ready(client) => break Ok(f(client.to_owned())),
-				KurtosisEngineState::Pending(_) => self.state_changed.notified().await,
-				KurtosisEngineState::Failed(reason) => break Err(reason.to_string()),
+			match &*client_state {
+				KurtosisClientState::Uninitialized =>
+					break Err("Client has not been initialized".to_string()),
+				KurtosisClientState::Ready(client) => break Ok(f(client.clone())),
+				KurtosisClientState::Pending(_) => self.state_changed.notified().await,
+				KurtosisClientState::Failed(reason) =>
+					break Err(format!("Client initialization failed: {:?}", reason)),
+			}
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+#[async_trait]
+pub trait ApiContainerClientTrait {
+	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
+	where
+		F: FnOnce(ApiContainerServiceClient<tonic::transport::Channel>) -> U + std::marker::Send;
+}
+
+#[cfg(feature = "std")]
+#[async_trait]
+impl ApiContainerClientTrait
+	for KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>>
+{
+	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
+	where
+		F: FnOnce(ApiContainerServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
+	{
+		self.state_changed.notified().await;
+		let client_state = self.client.lock().await;
+		loop {
+			match &*client_state {
+				KurtosisClientState::Uninitialized =>
+					break Err("Client has not been initialized".to_string()),
+				KurtosisClientState::Ready(client) => break Ok(f(client.clone())),
+				KurtosisClientState::Pending(_) => self.state_changed.notified().await,
+				KurtosisClientState::Failed(reason) =>
+					break Err(format!("Client initialization failed: {:?}", reason)),
 			}
 		}
 	}
@@ -114,12 +221,12 @@ impl KurtosisClient {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	pub struct KurtosisExt(Arc<KurtosisClient>);
+	pub struct KurtosisExt(Arc<KurtosisContainer>);
 }
 
 #[cfg(feature = "std")]
 impl KurtosisExt {
-	pub fn new(client: Arc<KurtosisClient>) -> Self {
+	pub fn new(client: Arc<KurtosisContainer>) -> Self {
 		Self(client)
 	}
 }
@@ -128,10 +235,8 @@ impl KurtosisExt {
 pub type HostFunctions = (kurtosis::HostFunctions,);
 
 const STARTUP_SCRIPT: &str = r#"
-package = import_module("https://github.com/hugobyte/polkadot-kurtosis-package/main.star")
-
 def main(plan):
-    package.run(plan, chain_type)
+    plan.print('Hello World!')
 "#;
 
 #[runtime_interface]
@@ -139,10 +244,12 @@ pub trait Kurtosis {
 	fn create_enclave(&mut self) {
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+
 			rt.block_on(async {
-				let enclave_response = kurtosis_ext
-					.0
-					.with_engine(|mut client| async move {
+				let engine_service =
+					kurtosis_ext.0.engine_service().expect("Failed to get engine service");
+				let response = engine_service
+					.with_client(|mut client| async move {
 						client
 							.create_enclave(CreateEnclaveArgs {
 								enclave_name: None,
@@ -152,42 +259,60 @@ pub trait Kurtosis {
 							})
 							.await
 							.unwrap()
+							.into_inner()
 					})
 					.await
 					.unwrap()
 					.await;
 
-				println!("{:?}", enclave_response);
+				let enclave_port = response
+					.enclave_info
+					.expect("Enclave info must be present")
+					.api_container_host_machine_info
+					.expect("Enclave host machine info must be present")
+					.grpc_port_on_host_machine;
 
-				// let enclave_port = enclave_response
-				// 	.enclave_info
-				// 	.expect("Enclave info must be present")
-				// 	.api_container_host_machine_info
-				// 	.expect("Enclave host machine info must be present")
-				// 	.grpc_port_on_host_machine;
-				// let mut enclave =
-				// 	ApiContainerServiceClient::connect(format!("https://[::1]:{}", enclave_port))
-				// 		.await
-				// 		.unwrap();
+				let api_container_service = KurtosisClient::<
+					ApiContainerServiceClient<tonic::transport::Channel>,
+				>::new_with_api_container(
+					enclave_port, engine_service.spawner.clone()
+				);
 
-				// let mut result = enclave
-				// 	.run_starlark_script(RunStarlarkScriptArgs {
-				// 		serialized_script: STARLARK_SCRIPT.to_string(),
-				// 		serialized_params: None,
-				// 		dry_run: Some(false),
-				// 		parallelism: None,
-				// 		main_function_name: Some("main".to_string()),
-				// 		experimental_features: vec![],
-				// 		cloud_instance_id: None,
-				// 		cloud_user_id: None,
-				// 		image_download_mode: None,
-				// 	})
-				// 	.await;
+				api_container_service.initialize();
 
-				// match result {
-				// 	Ok(_) => log::info!("Enclave created successfully"),
-				// 	Err(e) => log::error!("Failed to create enclave: {}", e),
-				// }
+				let mut result = api_container_service
+					.with_client(|mut client| async move {
+						client
+							.run_starlark_package(RunStarlarkPackageArgs {
+								package_id: "github.com/hugobyte/polkadot-kurtosis-package".to_string(),
+								parallelism: Some(4),
+								serialized_params: Some(r#"{ "chain_type": "local", "relaychain": { "name": "rococo-local", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] }, "parachains": [ { "name": "frequency", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] } ], "explorer": true }"#.to_string()),
+								dry_run: None,
+								clone_package: Some(true),
+								relative_path_to_main_file: Some("./main.star".to_string()),
+								main_function_name: Some("run".to_string()),
+								experimental_features: vec![],
+								cloud_instance_id: None,
+								cloud_user_id: None,
+								image_download_mode: None,
+								starlark_package_content: Some(StarlarkPackageContent::Remote(true)),
+							})
+							.await
+							.unwrap()
+							.into_inner()
+					})
+					.await
+					.unwrap()
+					.await;
+
+				while let Some(next_message) = result.message().await.unwrap() {
+					next_message.run_response_line.map(|line| match line {
+						InstructionResult(result) => {
+							println!("{}", result.serialized_instruction_result)
+						},
+						_ => (),
+					});
+				}
 			});
 		} else {
 			log::error!("KurtosisExt not found in externalities");
