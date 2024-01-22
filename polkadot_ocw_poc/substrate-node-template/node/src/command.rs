@@ -181,9 +181,11 @@ pub fn run() -> sc_cli::Result<()> {
 		None => {
 			let runner = cli.create_runner(&cli.run.base)?;
 			let provider_url = cli.run.provider_url.clone();
+			let request_id = cli.run.request_id.clone();
+			let conduit = cli.run.conduit.clone();
 
 			runner.run_node_until_exit(|config| async move {
-				service::new_full(config, provider_url).map_err(sc_cli::Error::Service)
+				service::new_full(config, provider_url, request_id, conduit).map_err(sc_cli::Error::Service)
 			})
 		},
 	}

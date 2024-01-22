@@ -1,6 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
@@ -9,7 +9,7 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpS
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-use sp_core::{sr25519::Public, ByteArray};
+use sp_core::{sr25519::Public, traits::SpawnNamed, ByteArray};
 use sp_runtime::traits::IdentifyAccount;
 use std::{ops::Index, sync::Arc, time::Duration};
 
@@ -122,6 +122,8 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 pub fn new_full(
 	config: Configuration,
 	provider_url: Option<String>,
+	request_id: Option<u64>,
+	conduit: bool,
 ) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -163,19 +165,23 @@ pub fn new_full(
 			block_relay: None,
 		})?;
 
+	let mut public_keys: std::string::String = String::new();
+	if conduit {
+		if let Ok(key) = keystore_container
+			.keystore()
+			.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
+		{
+			public_keys = key.to_string();
+			let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
+		};
+	}
+
 	if config.offchain_worker.enabled {
 		// If provider would need engine client, if conduit needs api container
 		let kurtosis_client = Arc::new(pallet_template::kurtosis::KurtosisClient::new_with_engine(
 			task_manager.spawn_handle(),
 		));
 		kurtosis_client.initialize();
-
-		if let Ok(key) = keystore_container
-			.keystore()
-			.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
-		{
-			let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
-		};
 
 		task_manager.spawn_handle().spawn(
 			"offchain-workers-runner",
@@ -333,5 +339,30 @@ pub fn new_full(
 	}
 
 	network_starter.start_network();
+	if conduit {
+		if request_id != None && provider_url != None && !public_keys.is_empty() {
+			// let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+			// rt.block_on(async move {
+			// 	crate::rpc_call::rpc_call_for_authorized_node(
+			// 		provider_url.unwrap().as_str(),
+			// 		public_keys,
+			// 		request_id.unwrap(),
+			// 	)
+			// 	.await
+			// 	.is_ok()
+			// }
+			// );
+			task_manager.spawn_handle().spawn_blocking("authorise_rpc", None, async move {
+				crate::rpc_call::rpc_call_for_authorized_node(
+					provider_url.unwrap().as_str(),
+					public_keys,
+					request_id.unwrap(),
+				)
+				.await
+				.unwrap()
+			});
+		}
+	}
+
 	Ok(task_manager)
 }

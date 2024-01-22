@@ -45,7 +45,7 @@ frame-system = { version = "4.0.0-dev", git = "https://github.com/paritytech/pol
 pallet-transaction-payment = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.16.2", features = ["server"] }
+jsonrpsee = { version = "0.16.2", features = ["server", "http-client"] }
 sp-api = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sc-rpc-api = { version = "0.10.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sp-blockchain = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
@@ -63,6 +63,7 @@ frame-benchmarking-cli = { version = "4.0.0-dev", git = "https://github.com/pari
 node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
 pallet-template = { version = "4.0.0-dev", default-features = false, path = "../pallets/template" }
 pallet-template-rpc = { default-features = false, path = "../pallets/template/rpc" }
+tokio = { version = "1", default-features = false }
 
 # CLI-specific dependencies
 try-runtime-cli = { version = "0.10.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", optional = true }

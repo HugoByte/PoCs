@@ -7,6 +7,12 @@ pub struct ExtendedRunCmd {
 
 	#[clap(long = "provider-url", value_name = "PROVIDER_URL")]
     pub provider_url: Option<String>,
+
+	#[clap(long = "request-id", value_name = "REQUEST_ID")]
+    pub request_id: Option<u64>,
+
+	#[clap(long = "conduit", default_value = "fasle")]
+	pub conduit: bool,
 }
 
 #[derive(Debug, clap::Parser)]
