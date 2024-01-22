@@ -1,16 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_system::{
-	self as system,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
+		AppCrypto, CreateSignedTransaction, ForAll, SendSignedTransaction, SendUnsignedTransaction,
 		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
 	pallet_prelude::BlockNumberFor,
 };
-
-use frame_system::offchain::{Account, ForAll};
 use sp_core::crypto::{AccountId32, KeyTypeId};
+pub use sp_core::ConstU32;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
 
@@ -69,6 +67,19 @@ pub mod pallet {
 	pub type RequestId = u64;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+	pub struct EnclaveRequestParam {
+		action: EnclaveAction,
+		script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
+	}
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+	pub enum EnclaveStatus {
+		Pending,
+		Active,
+		Inactive,
+	}
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 	pub enum EnclaveAction {
 		CreateEnclave {/* Enclave Specification */}, // Provider
 		SetupEnclave {/* Setup Configurations */},   // Conduit
@@ -82,6 +93,7 @@ pub mod pallet {
 	#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, Eq, MaxEncodedLen, TypeInfo)]
 	pub enum Outcome<T> {
 		EnclaveCreated { handle: T },
+		EnclaveSetupCompleted {},
 	}
 
 	#[derive(
@@ -95,7 +107,7 @@ pub mod pallet {
 	pub struct EnclaveRequest<T> {
 		user: T,
 		handler: Option<T>,
-		action: EnclaveAction,
+		params: EnclaveRequestParam,
 		// other details such as type of environment
 	}
 
@@ -143,12 +155,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[derive(
-		Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default, MaxEncodedLen, TypeInfo,
-	)]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 	pub struct EnclaveInfo<T> {
 		provider: T,
 		user: T,
+		status: EnclaveStatus,
 	}
 
 	#[pallet::storage]
@@ -182,6 +193,7 @@ pub mod pallet {
 			handler: T::AccountId,
 			enclave_port: u32,
 		},
+		EnclaveStatusUpdated(EnclaveStatus),
 		IntializeDeployment {},
 		DeploymentCompleted {},
 	}
@@ -194,6 +206,7 @@ pub mod pallet {
 		AlreadyAProvider,
 		NotAuthorizedHandler,
 		RequestNotFound,
+		EnclaveNotFound,
 	}
 
 	#[pallet::call]
@@ -216,12 +229,12 @@ pub mod pallet {
 		pub fn create_enclave_request(
 			origin: OriginFor<T>,
 			handler: Option<T::AccountId>,
-			action: EnclaveAction,
+			params: EnclaveRequestParam,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let request_id = Self::next_request_id();
-			let request = EnclaveRequest { user: who, handler, action };
+			let request = EnclaveRequest { user: who, handler, params };
 
 			EnclaveRequests::<T>::insert(request_id, request);
 
@@ -275,7 +288,7 @@ pub mod pallet {
 
 				ensure!(acknowledged_request.handler == who, Error::<T>::NotAuthorizedHandler);
 
-				let dispatch = match acknowledged_request.request.action {
+				let dispatch = match acknowledged_request.request.params.action {
 					EnclaveAction::CreateEnclave {} => {
 						ensure!(Providers::<T>::contains_key(&who), Error::<T>::NotAProvider);
 
@@ -284,6 +297,7 @@ pub mod pallet {
 								let enclave_info = EnclaveInfo {
 									provider: acknowledged_request.handler.clone(),
 									user: acknowledged_request.request.user.clone(),
+									status: EnclaveStatus::Pending,
 								};
 
 								Enclaves::<T>::insert(&handle, enclave_info);
@@ -291,9 +305,13 @@ pub mod pallet {
 								Self::create_enclave_request(
 									OriginFor::<T>::from(Some(who.clone()).into()),
 									Some(handle.to_owned()),
-									EnclaveAction::SetupEnclave {},
+									EnclaveRequestParam {
+										action: EnclaveAction::SetupEnclave {},
+										script: acknowledged_request.request.params.script.clone(),
+									},
 								)
 							},
+							_ => Ok(()),
 						}
 					},
 					_ => Ok(()),
@@ -308,6 +326,23 @@ pub mod pallet {
 				});
 
 				dispatch
+			})
+		}
+
+		#[pallet::weight(0)]
+		#[pallet::call_index(4)]
+		pub fn set_enclave_status(origin: OriginFor<T>, status: EnclaveStatus) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Enclaves::<T>::contains_key(&who), Error::<T>::EnclaveNotFound);
+
+			Enclaves::<T>::try_mutate(&who, |enclave_info| {
+				let enclave = enclave_info.as_mut().ok_or(Error::<T>::EnclaveNotFound)?;
+				enclave.status = status.clone();
+
+				Self::deposit_event(Event::EnclaveStatusUpdated(status));
+
+				Ok(())
 			})
 		}
 	}
@@ -329,7 +364,7 @@ pub mod pallet {
 				for (request_id, account_id) in authorized_nodes.clone().into_iter() {
 					Self::process_acknowledged_request_with_authorization(
 						request_id,
-						|request, signer| match request.action {
+						|request, signer| match request.params.action {
 							EnclaveAction::CreateEnclave {} => {
 								let tx_results = signer.send_signed_transaction(|_| {
 									Call::process_enclave_request {
@@ -368,10 +403,21 @@ pub mod pallet {
 					Ok(Event::<T>::EnclaveRequestAcknowledged(id)) => {
 						Self::process_acknowledged_request_with_authorization(
 							id,
-							|request, signer| match request.action {
+							|request, signer| match request.params.action {
 								EnclaveAction::CreateEnclave {} =>
 									kurtosis::kurtosis::create_enclave(),
-								EnclaveAction::SetupEnclave {} => {},
+								EnclaveAction::SetupEnclave {} => {
+									if let Ok(result) =
+										kurtosis::kurtosis::setup_enclave(request.params.script)
+									{
+										let tx_results = signer.send_signed_transaction(|_| {
+											Call::process_enclave_request {
+												request_id: id,
+												outcome: Outcome::EnclaveSetupCompleted {},
+											}
+										});
+									};
+								},
 								_ => {},
 							},
 						);
@@ -395,7 +441,7 @@ pub mod pallet {
 			F: FnOnce(EnclaveRequest<T::AccountId>, Signer<T, <T as Config>::AuthorityId, ForAll>),
 		{
 			if let Some(request) = EnclaveRequests::<T>::get(request_id) {
-				match request.action {
+				match request.params.action {
 					EnclaveAction::CreateEnclave {} => {
 						let signer = Signer::<T, T::AuthorityId>::all_accounts();
 
@@ -438,7 +484,5 @@ pub mod pallet {
 				};
 			};
 		}
-
-		fn create_enclave() {}
 	}
 }

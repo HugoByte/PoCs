@@ -164,6 +164,7 @@ pub fn new_full(
 		})?;
 
 	if config.offchain_worker.enabled {
+		// If provider would need engine client, if conduit needs api container
 		let kurtosis_client = Arc::new(pallet_template::kurtosis::KurtosisClient::new_with_engine(
 			task_manager.spawn_handle(),
 		));

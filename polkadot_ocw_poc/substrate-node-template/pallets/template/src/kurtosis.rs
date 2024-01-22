@@ -6,13 +6,13 @@ use futures::{
 	Future, FutureExt, TryFutureExt,
 };
 
-use kurtosis_sdk::enclave_api::RunStarlarkPackageArgs;
 #[cfg(feature = "std")]
 use kurtosis_sdk::{
 	enclave_api::{
 		api_container_service_client::ApiContainerServiceClient,
 		run_starlark_package_args::StarlarkPackageContent,
-		starlark_run_response_line::RunResponseLine::InstructionResult, RunStarlarkScriptArgs,
+		starlark_run_response_line::RunResponseLine::InstructionResult, RunStarlarkPackageArgs,
+		RunStarlarkScriptArgs,
 	},
 	engine_api::{engine_service_client::EngineServiceClient, CreateEnclaveArgs},
 };
@@ -23,10 +23,14 @@ use sp_core::traits::SpawnNamed;
 #[cfg(feature = "std")]
 use sp_externalities::ExternalitiesExt;
 
+use sp_runtime::WeakBoundedVec;
 #[cfg(feature = "std")]
 use tokio::sync::Notify;
+#[cfg(feature = "std")]
+use tokio::time::{sleep, Duration};
 
 use core::{future::IntoFuture, pin::Pin};
+pub use sp_core::ConstU32;
 use sp_runtime_interface::runtime_interface;
 use sp_std::{any::Any, boxed::Box, sync::Arc};
 
@@ -245,25 +249,32 @@ pub trait Kurtosis {
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
-			rt.block_on(async {
+			let (response, spawner) = rt.block_on(async {
 				let engine_service =
 					kurtosis_ext.0.engine_service().expect("Failed to get engine service");
-				let response = engine_service
-					.with_client(|mut client| async move {
-						client
-							.create_enclave(CreateEnclaveArgs {
-								enclave_name: None,
-								api_container_log_level: Some("info".to_string()),
-								api_container_version_tag: None,
-								mode: Some(0),
-							})
-							.await
-							.unwrap()
-							.into_inner()
-					})
-					.await
-					.unwrap()
-					.await;
+				(
+					engine_service
+						.with_client(|mut client| async move {
+							client
+								.create_enclave(CreateEnclaveArgs {
+									enclave_name: None,
+									api_container_log_level: Some("info".to_string()),
+									api_container_version_tag: None,
+									mode: Some(0),
+								})
+								.await
+								.unwrap()
+								.into_inner()
+						})
+						.await
+						.unwrap()
+						.await,
+					engine_service.spawner.clone(),
+				)
+			});
+
+			rt.block_on(async {
+				sleep(Duration::from_secs(20)).await;
 
 				let enclave_port = response
 					.enclave_info
@@ -275,7 +286,7 @@ pub trait Kurtosis {
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
 				>::new_with_api_container(
-					enclave_port, engine_service.spawner.clone()
+					enclave_port, spawner
 				);
 
 				api_container_service.initialize();
@@ -317,5 +328,52 @@ pub trait Kurtosis {
 		} else {
 			log::error!("KurtosisExt not found in externalities");
 		}
+	}
+
+	fn setup_enclave(
+		&mut self,
+		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
+	) -> Result<(), String> {
+		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
+			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+			let api_container_service = kurtosis_ext
+				.0
+				.api_container_service()
+				.expect("Failed to get api container service");
+
+			rt.block_on(async {
+				let mut result = api_container_service
+					.with_client(|mut client| async move {
+						client
+							.run_starlark_script(RunStarlarkScriptArgs {
+								parallelism: Some(4),
+								serialized_script: String::from_utf8(setup_script.expect("Need script for setup").into_iter().collect()).unwrap_or_else(|_| String::from("Invalid UTF-8")),
+								serialized_params: None,
+								dry_run: None,
+								main_function_name: Some("run".to_string()),
+								experimental_features: vec![],
+								cloud_instance_id: None,
+								cloud_user_id: None,
+								image_download_mode: None,
+							})
+							.await
+							.unwrap()
+							.into_inner()
+					})
+					.await
+					.unwrap()
+					.await;
+
+				while let Some(next_message) = result.message().await.unwrap() {
+					next_message.run_response_line.map(|line| match line {
+						InstructionResult(result) => {
+							println!("{}", result.serialized_instruction_result)
+						},
+						_ => (),
+					});
+				}
+			});
+		}
+		Ok(())
 	}
 }
