@@ -9,6 +9,7 @@ pub mod pallet {
 		dispatch::{DispatchResult, Vec},
 		pallet_prelude::*,
 	};
+	use frame_support::sp_std::prelude::ToOwned;
 	use frame_system::pallet_prelude::*;
 	use scale_info::prelude::string::String;
 
@@ -29,9 +30,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		StudentCreated { who: T::AccountId, student_id: u32, student_name: String },
-		StudentRetrieved { who: T::AccountId, student_id: u32, student_name: String },
-		AllStudentsRetrieved { who: T::AccountId, students: Vec<(u32, String)> },
+		StudentCreated { student_id: u32, student_name: String },
+		StudentRetrieved { student_id: u32, student_name: String },
+		AllStudentsRetrieved {students: Vec<(u32, String)> },
+		MarksScored {student_id: u32, average_marks: u32, result: String}
 	}
 
 	#[pallet::error]
@@ -53,7 +55,7 @@ pub mod pallet {
 			Students::<T>::insert(&student_id, (&sender, student_name.clone()));
 
 			// Emit an event that the student was created
-			Self::deposit_event(Event::StudentCreated { who: sender, student_id, student_name });
+			Self::deposit_event(Event::StudentCreated { student_id, student_name });
 			Ok(())
 		}
 
@@ -69,7 +71,6 @@ pub mod pallet {
 					let student_name_vec = student.1;
 
 					Self::deposit_event(Event::StudentRetrieved {
-						who: sender,
 						student_id: id,
 						student_name: student_name_vec,
 					});
@@ -81,10 +82,23 @@ pub mod pallet {
 						.map(|(id, (_, name_fixed))| (id, name_fixed))
 						.collect();
 
-					Self::deposit_event(Event::AllStudentsRetrieved { who: sender, students });
+					Self::deposit_event(Event::AllStudentsRetrieved { students });
 					Ok(())
 				},
 			}
 		}
+		#[pallet::weight(0)]
+		#[pallet::call_index(3)]
+		pub fn add_marks(origin: OriginFor<T>, student_id: u32, internal_marks_1: u32, internal_marks_2: u32, internal_marks_3: u32) -> DispatchResult{
+			let sender = ensure_signed(origin)?;
+        	let student = Students::<T>::get(&student_id).ok_or(Error::<T>::StudentNotFound)?;
+			let average_marks = (internal_marks_1 + internal_marks_2 + internal_marks_3) / 3;
+
+			let result = if average_marks >= 40 { "Pass" } else { "Fail" };
+
+			Self::deposit_event(Event::MarksScored { student_id, average_marks, result: result.to_owned() });
+			Ok(())
+		}
+
 	}
 }
