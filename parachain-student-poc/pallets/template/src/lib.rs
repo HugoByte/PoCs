@@ -43,6 +43,9 @@ pub mod pallet {
         },
         MarksScored {
             student_id: u32,
+			internal_marks_1: u32,
+			internal_marks_2: u32,
+			internal_marks_3: u32,
             average_marks: u32,
             result: String,
         },
@@ -118,6 +121,9 @@ pub mod pallet {
 
             Self::deposit_event(Event::MarksScored {
                 student_id,
+				internal_marks_1,
+				internal_marks_2,
+				internal_marks_3,
                 average_marks,
                 result: result.to_owned(),
             });
