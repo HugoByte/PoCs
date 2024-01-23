@@ -15,8 +15,14 @@ pub mod pallet {
 
     #[pallet::storage]
     pub(super) type Students<T: Config> =
-        StorageMap<_, Blake2_128Concat, u32, (T::AccountId, String)>;
-
+        StorageMap<_, Blake2_128Concat, u32, (String, Marks)>;
+#[derive(Default, Encode, Decode, TypeInfo)]
+	pub struct Marks{
+		internal_marks_1: u32,
+		internal_marks_2: u32,
+		internal_marks_3: u32,
+		average_marks : u32,
+	}
     #[pallet::pallet]
     #[pallet::without_storage_info]
     #[pallet::generate_store(pub(super) trait Store)]
@@ -43,10 +49,6 @@ pub mod pallet {
         },
         MarksScored {
             student_id: u32,
-			internal_marks_1: u32,
-			internal_marks_2: u32,
-			internal_marks_3: u32,
-            average_marks: u32,
             result: String,
         },
     }
@@ -60,14 +62,21 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         #[pallet::weight(0)]
         #[pallet::call_index(1)]
-        pub fn create_student(origin: OriginFor<T>, student_name: String) -> DispatchResult {
+        pub fn create_student(origin: OriginFor<T>, student_name: String, internal_marks_1: u32, internal_marks_2: u32, internal_marks_3: u32) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-
+            let average_marks = (internal_marks_1 + internal_marks_2 + internal_marks_3) / 3;
+            let marks = Marks {
+                internal_marks_1,
+                internal_marks_2,
+                internal_marks_3,
+                average_marks,
+            };
             // Get the next available student_id
             let student_id = Students::<T>::iter().map(|(key, _)| key).max().unwrap_or(0) + 1;
 
+
             // Store the student information
-            Students::<T>::insert(&student_id, (&sender, student_name.clone()));
+            Students::<T>::insert(&student_id, (student_name.clone(), marks ));
 
             // Emit an event that the student was created
             Self::deposit_event(Event::StudentCreated {
@@ -86,7 +95,7 @@ pub mod pallet {
                 Some(id) => {
                     // Retrieve the specific student
                     let student = Students::<T>::get(&id).ok_or(Error::<T>::StudentNotFound)?;
-                    let student_name_vec = student.1;
+                    let student_name_vec = student.0;
 
                     Self::deposit_event(Event::StudentRetrieved {
                         student_id: id,
@@ -97,35 +106,28 @@ pub mod pallet {
                 None => {
                     // Retrieve all students
                     let students = Students::<T>::iter()
-                        .map(|(id, (_, name_fixed))| (id, name_fixed))
-                        .collect();
-
-                    Self::deposit_event(Event::AllStudentsRetrieved { students });
+                    .map(|(id, (name, _))| (id, name))
+                    .collect();
+                Self::deposit_event(Event::AllStudentsRetrieved { students });
                     Ok(())
                 }
             }
         }
         #[pallet::weight(0)]
         #[pallet::call_index(3)]
-        pub fn add_marks(
+        pub fn check_result(
             _origin: OriginFor<T>,
             student_id: u32,
-            internal_marks_1: u32,
-            internal_marks_2: u32,
-            internal_marks_3: u32,
         ) -> DispatchResult {
-            let _student = Students::<T>::get(&student_id).ok_or(Error::<T>::StudentNotFound)?;
-            let average_marks = (internal_marks_1 + internal_marks_2 + internal_marks_3) / 3;
+            let student = Students::<T>::get(&student_id).ok_or(Error::<T>::StudentNotFound)?;
+            let marks = student.1;
+            let avg = marks.average_marks;
 
-            let result = if average_marks >= 40 { "Pass" } else { "Fail" };
+			let r = if avg >= 40 {"pass".to_string()} else {"fail".to_string()};
 
             Self::deposit_event(Event::MarksScored {
                 student_id,
-				internal_marks_1,
-				internal_marks_2,
-				internal_marks_3,
-                average_marks,
-                result: result.to_owned(),
+                result: r.to_owned(),
             });
             Ok(())
         }
