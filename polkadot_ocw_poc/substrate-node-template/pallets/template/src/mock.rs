@@ -22,21 +22,27 @@ use frame_support::{
 	assert_ok, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
+
+use sp_std::sync::Arc;
+
+use parking_lot::{RawRwLock, RwLock};
+
 use sp_core::{
 	offchain::{
-		testing::{self, OffchainState, TestOffchainExt},
-		OffchainWorkerExt, TransactionPoolExt, OffchainDbExt
+		testing::{self, OffchainState, PoolState, TestOffchainExt, TestPersistentOffchainDB},
+		OffchainDbExt, OffchainStorage, OffchainWorkerExt, TransactionPoolExt,
 	},
 	sr25519::Signature,
 	H256,
 };
 
-use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
 	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	BuildStorage, RuntimeAppPublic,
 };
+
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -114,24 +120,37 @@ impl pallet_template::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type AuthorityId = crypto::AuthId;
+	type MaxEnclaveCount = ConstU32<{ u32::MAX }>;
 }
 
 pub fn test_pub() -> sp_core::sr25519::Public {
 	sp_core::sr25519::Public::from_raw([1u8; 32])
 }
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	// Create a default genesis config
-	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into();
+pub fn new_mock_runtime<F>(f: F)
+where
+	F: FnOnce(
+		sp_io::TestExternalities,
+		Arc<RwLock<OffchainState>>,
+		Arc<MemoryKeystore>,
+		Arc<RwLock<PoolState>>,
+	),
+{
+	let mut ext: sp_io::TestExternalities =
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into();
 
-	// Create and configure offchain worker externalities
-	let (offchain, _offchain_state) = TestOffchainExt::new();
-	t.ext().register_extension(OffchainWorkerExt::new(offchain));
+	let (offchain, offchain_state) = TestOffchainExt::new();
 
-	// Optionally, you can also initialize and configure the offchain database extension
-	let (offchain_db, _offchain_db_state) = testing::TestOffchainDbExt::new();
-	t.ext().register_extension(OffchainDbExt::new(offchain_db));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	
+	let keystore = Arc::new(MemoryKeystore::new());
+	ext.register_extension(KeystoreExt::from(keystore.clone()));
 
-	t
+	let (transaction_pool, transaction_pool_state) = testing::TestTransactionPoolExt::new();
+	ext.register_extension(TransactionPoolExt::new(transaction_pool));
+
+	ext.execute_with(|| System::set_block_number(1));
+
+	f(ext, offchain_state, keystore, transaction_pool_state)
 }

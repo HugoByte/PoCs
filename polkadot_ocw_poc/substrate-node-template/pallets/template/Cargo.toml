@@ -36,7 +36,11 @@ sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "po
 async-trait = "0.1.77"
 
 [dev-dependencies]
-
+impl_new = "0.2.0"
+parking_lot = "0.12.1"
+sp-keystore = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+env_logger = "0.9"
+sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 
 [features]
 default = ["std"]

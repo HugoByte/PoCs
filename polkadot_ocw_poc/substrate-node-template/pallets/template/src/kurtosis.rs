@@ -238,14 +238,11 @@ impl KurtosisExt {
 #[cfg(feature = "std")]
 pub type HostFunctions = (kurtosis::HostFunctions,);
 
-const STARTUP_SCRIPT: &str = r#"
-def main(plan):
-    plan.print('Hello World!')
-"#;
-
 #[runtime_interface]
 pub trait Kurtosis {
 	fn create_enclave(&mut self) {
+
+		#[cfg(not(test))]
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
@@ -325,15 +322,16 @@ pub trait Kurtosis {
 					});
 				}
 			});
-		} else {
-			log::error!("KurtosisExt not found in externalities");
 		}
+
 	}
 
 	fn setup_enclave(
 		&mut self,
 		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
 	) -> Result<(), String> {
+
+		#[cfg(not(test))]
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 			let api_container_service = kurtosis_ext
@@ -374,6 +372,7 @@ pub trait Kurtosis {
 				}
 			});
 		}
+
 		Ok(())
 	}
 }

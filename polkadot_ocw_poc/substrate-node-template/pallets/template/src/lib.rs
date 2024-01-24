@@ -166,6 +166,17 @@ pub mod pallet {
 		status: EnclaveStatus,
 	}
 
+	#[cfg(test)]
+	impl<T> EnclaveInfo<T> {
+		pub fn new(provider: T, user: T, status: EnclaveStatus) -> Self {
+			Self { provider, user, status }
+		}
+
+		pub fn status(&self) -> &EnclaveStatus {
+			&self.status
+		}
+	}
+
 	#[pallet::storage]
 	#[pallet::getter(fn enclaves)]
 	pub type Enclaves<T: Config> =
@@ -319,8 +330,15 @@ pub mod pallet {
 									},
 								)
 							},
-							_ => Ok(()),
+							_ => Ok({}),
 						}
+					},
+					EnclaveAction::SetupEnclave {} => match outcome {
+						Outcome::EnclaveSetupCompleted {} => Self::set_enclave_status(
+							OriginFor::<T>::from(Some(who.clone()).into()),
+							EnclaveStatus::Active,
+						),
+						_ => Ok({}),
 					},
 					_ => Ok(()),
 				};
@@ -420,9 +438,8 @@ pub mod pallet {
 				let mut processed_requests = Vec::new();
 
 				for (request_id, account_id) in authorized_nodes.clone().into_iter() {
-					Self::acknowledged_request_with_authorization(
-						request_id,
-						|request, signer| match request.params.action {
+					Self::acknowledged_request_with_authorization(request_id, |request, signer| {
+						match request.params.action {
 							EnclaveAction::CreateEnclave {} => {
 								let tx_results = signer.send_signed_transaction(|_| {
 									Call::process_enclave_request {
@@ -434,8 +451,8 @@ pub mod pallet {
 								});
 							},
 							_ => {},
-						},
-					);
+						}
+					});
 
 					processed_requests.push(request_id);
 				}
@@ -473,7 +490,20 @@ pub mod pallet {
 							};
 						};
 					},
-					_ => {},
+					_ => {
+						let signer = Signer::<T, T::AuthorityId>::all_accounts();
+
+						if let Some(ref account) = signer
+							.accounts_from_keys()
+							.find(|account| request.handler == Some(account.id.clone()))
+						{
+							f(
+								request,
+								Signer::<T, T::AuthorityId>::all_accounts()
+									.with_filter(vec![account.public.clone()]),
+							)
+						};
+					},
 				};
 			};
 		}
