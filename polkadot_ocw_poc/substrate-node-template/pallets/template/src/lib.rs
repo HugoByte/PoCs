@@ -53,6 +53,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod testing;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
@@ -67,6 +70,7 @@ pub mod pallet {
 	pub type RequestId = u64;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+	#[cfg_attr(test, derive(impl_new::New))]
 	pub struct EnclaveRequestParam {
 		action: EnclaveAction,
 		script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
@@ -259,6 +263,10 @@ pub mod pallet {
 					Error::<T>::NotAuthorizedHandler
 				);
 
+				if let EnclaveAction::CreateEnclave { .. } = request.params.action {
+					ensure!(Providers::<T>::contains_key(&who), Error::<T>::NotAProvider);
+				}
+
 				let acknowledged_request = AcknowledgedRequest {
 					request: request.to_owned(),
 					start_block: <frame_system::Pallet<T>>::block_number(),
@@ -354,15 +362,65 @@ pub mod pallet {
 		<T as frame_system::Config>::RuntimeEvent: TryInto<pallet::Event<T>>,
 	{
 		fn offchain_worker(block_number: BlockNumberFor<T>) {
+			Self::process_pending_authorized_conduit_nodes();
+
+			for (index, event) in frame_system::Pallet::<T>::read_events_no_consensus().enumerate()
+			{
+				match event.event.try_into() {
+					Ok(Event::<T>::EnclaveRequestCreated(id)) =>
+						Self::handle_enclave_request_created(id),
+					Ok(Event::<T>::EnclaveRequestAcknowledged(id)) =>
+						Self::handle_enclave_request_acknowledged(id),
+					_ => {}, // Ignore other events
+				}
+			}
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		fn next_request_id() -> u64 {
+			let next_request = RequestCounter::<T>::get().wrapping_add(1);
+			RequestCounter::<T>::put(next_request);
+
+			next_request
+		}
+
+		pub fn handle_enclave_request_created(id: RequestId) {
+			Self::request_with_authorization(id, |request, signer| {
+				let tx_results = signer.send_signed_transaction(|_| {
+					Call::acknowledge_enclave_request { request_id: id }
+				});
+			});
+		}
+
+		pub fn handle_enclave_request_acknowledged(id: RequestId) {
+			Self::acknowledged_request_with_authorization(id, |request, signer| {
+				match request.params.action {
+					EnclaveAction::CreateEnclave {} => kurtosis::kurtosis::create_enclave(),
+					EnclaveAction::SetupEnclave {} => {
+						if let Ok(result) = kurtosis::kurtosis::setup_enclave(request.params.script)
+						{
+							let tx_results =
+								signer.send_signed_transaction(|_| Call::process_enclave_request {
+									request_id: id,
+									outcome: Outcome::EnclaveSetupCompleted {},
+								});
+						};
+					},
+					_ => {},
+				}
+			});
+		}
+
+		pub fn process_pending_authorized_conduit_nodes() {
 			let storage_ref = StorageValueRef::persistent(PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE);
 
-			// Potential Race condition should optimize
 			if let Ok(Some(mut authorized_nodes)) = storage_ref.get::<BTreeMap<u64, T::AccountId>>()
 			{
 				let mut processed_requests = Vec::new();
 
 				for (request_id, account_id) in authorized_nodes.clone().into_iter() {
-					Self::process_acknowledged_request_with_authorization(
+					Self::acknowledged_request_with_authorization(
 						request_id,
 						|request, signer| match request.params.action {
 							EnclaveAction::CreateEnclave {} => {
@@ -389,54 +447,9 @@ pub mod pallet {
 				let serialized = authorized_nodes.encode();
 				storage_ref.set(&serialized);
 			}
-
-			for (index, event) in frame_system::Pallet::<T>::read_events_no_consensus().enumerate()
-			{
-				match event.event.try_into() {
-					Ok(Event::<T>::EnclaveRequestCreated(id)) => {
-						Self::request_with_authorization(id, |request, signer| {
-							let tx_results = signer.send_signed_transaction(|_| {
-								Call::acknowledge_enclave_request { request_id: id }
-							});
-						});
-					},
-					Ok(Event::<T>::EnclaveRequestAcknowledged(id)) => {
-						Self::process_acknowledged_request_with_authorization(
-							id,
-							|request, signer| match request.params.action {
-								EnclaveAction::CreateEnclave {} =>
-									kurtosis::kurtosis::create_enclave(),
-								EnclaveAction::SetupEnclave {} => {
-									if let Ok(result) =
-										kurtosis::kurtosis::setup_enclave(request.params.script)
-									{
-										let tx_results = signer.send_signed_transaction(|_| {
-											Call::process_enclave_request {
-												request_id: id,
-												outcome: Outcome::EnclaveSetupCompleted {},
-											}
-										});
-									};
-								},
-								_ => {},
-							},
-						);
-					},
-					_ => {}, // Ignore other events
-				}
-			}
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		fn next_request_id() -> u64 {
-			let next_request = RequestCounter::<T>::get().wrapping_add(1);
-			RequestCounter::<T>::put(next_request);
-
-			next_request
 		}
 
-		pub fn request_with_authorization<F>(request_id: u64, f: F)
+		pub fn request_with_authorization<F>(request_id: RequestId, f: F)
 		where
 			F: FnOnce(EnclaveRequest<T::AccountId>, Signer<T, <T as Config>::AuthorityId, ForAll>),
 		{
@@ -449,8 +462,8 @@ pub mod pallet {
 							.accounts_from_keys()
 							.find(|account| Providers::<T>::contains_key(&account.id))
 						{
-							if (request.handler.is_none() ||
-								*request.handler.as_ref().unwrap() == account.id.clone())
+							if request.handler.is_none() ||
+								*request.handler.as_ref().unwrap() == account.id.clone()
 							{
 								f(
 									request,
@@ -465,7 +478,7 @@ pub mod pallet {
 			};
 		}
 
-		pub fn process_acknowledged_request_with_authorization<F>(request_id: u64, f: F)
+		pub fn acknowledged_request_with_authorization<F>(request_id: RequestId, f: F)
 		where
 			F: FnOnce(EnclaveRequest<T::AccountId>, Signer<T, <T as Config>::AuthorityId, ForAll>),
 		{
