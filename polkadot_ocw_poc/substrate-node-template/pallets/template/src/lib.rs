@@ -56,8 +56,8 @@ mod tests;
 #[cfg(test)]
 mod testing;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
@@ -416,7 +416,7 @@ pub mod pallet {
 				match request.params.action {
 					EnclaveAction::CreateEnclave {} => kurtosis::kurtosis::create_enclave(),
 					EnclaveAction::SetupEnclave {} => {
-						if let Ok(result) = kurtosis::kurtosis::setup_enclave(request.params.script)
+						if let Ok(()) = kurtosis::kurtosis::setup_enclave(request.params.script)
 						{
 							let tx_results =
 								signer.send_signed_transaction(|_| Call::process_enclave_request {

@@ -168,13 +168,16 @@ fn acknowledge_enclave_request_fails_for_unauthorized_handler() {
 
 #[test]
 fn acknowledge_enclave_request_fails_if_already_acknowledged() {
-	new_mock_runtime(|mut ext, _, _, _| {
+	new_mock_runtime(|mut ext, _, keystore, _| {
 		ext.execute_with(|| {
-			let account_id = sp_core::sr25519::Public::from_raw([1u8; 32]);
-			let handler = sp_core::sr25519::Public::from_raw([2u8; 32]);
+			assert_ok!(keystore.insert(crate::KEY_TYPE, "//user", &[1u8; 32]));
+			assert_ok!(keystore.insert(crate::KEY_TYPE, "//handler", &[2u8; 32]));
+
+			let user = keystore.sr25519_public_keys(crate::KEY_TYPE)[0];
+			let handler = keystore.sr25519_public_keys(crate::KEY_TYPE)[1];
 
 			assert_ok!(TemplateModule::create_enclave_request(
-				RuntimeOrigin::signed(account_id),
+				RuntimeOrigin::signed(user),
 				None,
 				crate::EnclaveRequestParam::new(crate::EnclaveAction::CreateEnclave {}, None)
 			));

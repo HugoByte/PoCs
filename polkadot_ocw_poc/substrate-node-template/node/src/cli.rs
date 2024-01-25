@@ -2,17 +2,23 @@ use sc_cli::RunCmd;
 
 #[derive(Debug, clap::Parser)]
 pub struct ExtendedRunCmd {
-    #[clap(flatten)]
-    pub base: RunCmd,
+	#[clap(flatten)]
+	pub base: RunCmd,
 
-	#[clap(long = "provider-url", value_name = "PROVIDER_URL")]
-    pub provider_url: Option<String>,
+	#[clap(long = "provider-url")]
+	pub provider_url: String,
 
-	#[clap(long = "request-id", value_name = "REQUEST_ID")]
-    pub request_id: Option<u64>,
+	#[clap(long = "request-id")]
+	pub request_id: Option<u64>,
 
-	#[clap(long = "conduit", default_value = "fasle")]
+	#[clap(long, conflicts_with = "provider")]
 	pub conduit: bool,
+
+    #[clap(long = "enclave-port")]
+	pub enclave_port: Option<u32>,
+
+	#[clap(long)]
+	pub provider: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -20,8 +26,8 @@ pub struct Cli {
 	#[command(subcommand)]
 	pub subcommand: Option<Subcommand>,
 
-    #[clap(flatten)]
-    pub run: ExtendedRunCmd,
+	#[clap(flatten)]
+	pub run: ExtendedRunCmd,
 }
 
 #[derive(Debug, clap::Subcommand)]

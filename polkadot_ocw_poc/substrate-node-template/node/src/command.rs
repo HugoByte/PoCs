@@ -6,7 +6,7 @@ use crate::{
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
-use sc_cli::SubstrateCli;
+use sc_cli::{SubstrateCli, CliConfiguration};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
@@ -182,10 +182,13 @@ pub fn run() -> sc_cli::Result<()> {
 			let runner = cli.create_runner(&cli.run.base)?;
 			let provider_url = cli.run.provider_url.clone();
 			let request_id = cli.run.request_id.clone();
-			let conduit = cli.run.conduit.clone();
+			let provider = cli.run.provider;
+			let conduit = cli.run.conduit;
+			let enclave_port = cli.run.enclave_port;
+			let is_dev = cli.run.base.is_dev().unwrap_or_default();
 
 			runner.run_node_until_exit(|config| async move {
-				service::new_full(config, provider_url, request_id, conduit).map_err(sc_cli::Error::Service)
+				service::new_full(config, provider_url, request_id, provider, conduit, enclave_port, is_dev).map_err(sc_cli::Error::Service)
 			})
 		},
 	}

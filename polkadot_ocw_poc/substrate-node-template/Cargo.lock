@@ -5225,6 +5225,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-grandpa",
  "sp-core",
+ "sp-externalities 0.19.0 (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
  "sp-inherents",
  "sp-io",
  "sp-keyring",

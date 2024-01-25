@@ -87,14 +87,14 @@ impl KurtosisContainer {
 
 #[cfg(feature = "std")]
 impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_engine(spawner: impl SpawnNamed + 'static) -> Self {
+	pub fn new_with_engine(spawner: impl SpawnNamed + 'static) -> Arc<Self> {
 		let future = async move { EngineServiceClient::connect("https://[::1]:9710").await };
 
-		Self {
+		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
 			spawner: Box::new(spawner),
 			state_changed: Arc::new(Notify::new()),
-		}
+		})
 	}
 }
 
@@ -241,7 +241,6 @@ pub type HostFunctions = (kurtosis::HostFunctions,);
 #[runtime_interface]
 pub trait Kurtosis {
 	fn create_enclave(&mut self) {
-
 		#[cfg(not(test))]
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -294,7 +293,7 @@ pub trait Kurtosis {
 							.run_starlark_package(RunStarlarkPackageArgs {
 								package_id: "github.com/hugobyte/polkadot-kurtosis-package".to_string(),
 								parallelism: Some(4),
-								serialized_params: Some(r#"{ "chain_type": "local", "relaychain": { "name": "rococo-local", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] }, "parachains": [ { "name": "frequency", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] } ], "explorer": true }"#.to_string()),
+								serialized_params: Some(r#"{ "chain_type": "localnet", "relaychain": { "name": "rococo-local", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] }, "parachains": [ { "name":"frequency", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false } ] } ], "explorer": true }"#.to_string()),
 								dry_run: None,
 								clone_package: Some(true),
 								relative_path_to_main_file: Some("./main.star".to_string()),
@@ -323,14 +322,12 @@ pub trait Kurtosis {
 				}
 			});
 		}
-
 	}
 
 	fn setup_enclave(
 		&mut self,
 		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
-	) -> Result<(), String> {
-
+	) -> Result<(), ()> {
 		#[cfg(not(test))]
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -345,7 +342,13 @@ pub trait Kurtosis {
 						client
 							.run_starlark_script(RunStarlarkScriptArgs {
 								parallelism: Some(4),
-								serialized_script: String::from_utf8(setup_script.expect("Need script for setup").into_iter().collect()).unwrap_or_else(|_| String::from("Invalid UTF-8")),
+								serialized_script: String::from_utf8(
+									setup_script
+										.expect("Need script for setup")
+										.into_iter()
+										.collect(),
+								)
+								.unwrap_or_else(|_| String::from("Invalid UTF-8")),
 								serialized_params: None,
 								dry_run: None,
 								main_function_name: Some("run".to_string()),

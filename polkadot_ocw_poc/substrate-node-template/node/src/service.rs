@@ -10,6 +10,7 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sp_core::{sr25519::Public, traits::SpawnNamed, ByteArray};
+use sp_externalities::Extension;
 use sp_runtime::traits::IdentifyAccount;
 use std::{ops::Index, sync::Arc, time::Duration};
 
@@ -121,9 +122,12 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 /// Builds a new service for a full client.
 pub fn new_full(
 	config: Configuration,
-	provider_url: Option<String>,
+	provider_url: String,
 	request_id: Option<u64>,
+	provider: bool,
 	conduit: bool,
+	enclave_port: Option<u32>,
+	is_dev: bool,
 ) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -165,23 +169,54 @@ pub fn new_full(
 			block_relay: None,
 		})?;
 
-	let mut public_keys: std::string::String = String::new();
-	if conduit {
-		if let Ok(key) = keystore_container
-			.keystore()
-			.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
-		{
-			public_keys = key.to_string();
-			let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
-		};
-	}
-
 	if config.offchain_worker.enabled {
-		// If provider would need engine client, if conduit needs api container
-		let kurtosis_client = Arc::new(pallet_template::kurtosis::KurtosisClient::new_with_engine(
-			task_manager.spawn_handle(),
-		));
-		kurtosis_client.initialize();
+		let mut kurtosis_clients = Vec::new();
+
+		if provider {
+			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(
+				task_manager.spawn_handle(),
+			);
+			client.initialize();
+
+			kurtosis_clients
+				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
+
+			if is_dev {
+				if let Ok(key) = keystore_container
+					.keystore()
+					.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
+				{
+					let _ =
+						keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
+				};
+			}
+		}
+
+		if conduit {
+			let client = pallet_template::kurtosis::KurtosisClient::new_with_api_container(
+				enclave_port.expect("enclave port not provided"),
+				task_manager.spawn_handle(),
+			);
+			client.initialize();
+
+			kurtosis_clients
+				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
+
+			if let Ok(key) = keystore_container
+				.keystore()
+				.sr25519_generate_new(pallet_template::KEY_TYPE, None)
+			{
+				let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
+
+				let client = jsonrpsee::http_client::HttpClientBuilder::default()
+					.build(provider_url)
+					.unwrap();
+
+				let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
+					&client, key, request_id.expect("request_id not provided"),
+				);
+			};
+		}
 
 		task_manager.spawn_handle().spawn(
 			"offchain-workers-runner",
@@ -197,9 +232,20 @@ pub fn new_full(
 				network_provider: network.clone(),
 				enable_http_requests: true,
 				custom_extensions: move |_| {
-					vec![Box::new(pallet_template::kurtosis::KurtosisExt::new(Arc::new(
-						pallet_template::kurtosis::KurtosisContainer::new(kurtosis_client.clone()),
-					))) as Box<_>]
+					let mut extensions = vec![];
+
+					extensions.extend(
+						kurtosis_clients
+							.iter()
+							.map(|client| {
+								Box::new(pallet_template::kurtosis::KurtosisExt::new(
+									client.clone(),
+								)) as Box<dyn Extension>
+							})
+							.collect::<Vec<_>>(),
+					);
+
+					extensions
 				},
 			})
 			.run(client.clone(), task_manager.spawn_handle())
@@ -339,30 +385,6 @@ pub fn new_full(
 	}
 
 	network_starter.start_network();
-	if conduit {
-		if request_id != None && provider_url != None && !public_keys.is_empty() {
-			// let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-			// rt.block_on(async move {
-			// 	crate::rpc_call::rpc_call_for_authorized_node(
-			// 		provider_url.unwrap().as_str(),
-			// 		public_keys,
-			// 		request_id.unwrap(),
-			// 	)
-			// 	.await
-			// 	.is_ok()
-			// }
-			// );
-			task_manager.spawn_handle().spawn_blocking("authorise_rpc", None, async move {
-				crate::rpc_call::rpc_call_for_authorized_node(
-					provider_url.unwrap().as_str(),
-					public_keys,
-					request_id.unwrap(),
-				)
-				.await
-				.unwrap()
-			});
-		}
-	}
 
 	Ok(task_manager)
 }
