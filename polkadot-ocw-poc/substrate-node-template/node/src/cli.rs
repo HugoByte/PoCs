@@ -1,12 +1,33 @@
 use sc_cli::RunCmd;
 
 #[derive(Debug, clap::Parser)]
+pub struct ExtendedRunCmd {
+	#[clap(flatten)]
+	pub base: RunCmd,
+
+	#[clap(long = "provider-url")]
+	pub provider_url: String,
+
+	#[clap(long = "request-id")]
+	pub request_id: Option<u64>,
+
+	#[clap(long, conflicts_with = "provider")]
+	pub conduit: bool,
+
+    #[clap(long = "enclave-port")]
+	pub enclave_port: Option<u32>,
+
+	#[clap(long)]
+	pub provider: bool,
+}
+
+#[derive(Debug, clap::Parser)]
 pub struct Cli {
 	#[command(subcommand)]
 	pub subcommand: Option<Subcommand>,
 
 	#[clap(flatten)]
-	pub run: RunCmd,
+	pub run: ExtendedRunCmd,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -41,12 +62,9 @@ pub enum Subcommand {
 	#[command(subcommand)]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
-	/// Try some command against runtime state.
-	#[cfg(feature = "try-runtime")]
-	TryRuntime(try_runtime_cli::TryRuntimeCmd),
-
-	/// Try some command against runtime state. Note: `try-runtime` feature must be enabled.
-	#[cfg(not(feature = "try-runtime"))]
+	/// Try-runtime has migrated to a standalone CLI
+	/// (<https://github.com/paritytech/try-runtime-cli>). The subcommand exists as a stub and
+	/// deprecation notice. It will be removed entirely some time after Janurary 2024.
 	TryRuntime,
 
 	/// Db meta columns information.
