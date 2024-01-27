@@ -58,3 +58,4 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
                 command = ["/usr/local/bin/node-template", "key", "insert", "--scheme Ed25519", "--suri {0}".format(node_args["seed"]), "--key-type gran", "--chain /data/customSpec.json"],
             ),
         )
+
