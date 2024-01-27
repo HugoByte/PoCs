@@ -122,7 +122,7 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 /// Builds a new service for a full client.
 pub fn new_full(
 	config: Configuration,
-	provider_url: String,
+	provider_url: Option<String>,
 	request_id: Option<u64>,
 	provider: bool,
 	conduit: bool,
@@ -209,7 +209,7 @@ pub fn new_full(
 				let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
 
 				let client = jsonrpsee::http_client::HttpClientBuilder::default()
-					.build(provider_url)
+					.build(provider_url.expect("provider url not provided"))
 					.unwrap();
 
 				let _ = pallet_template_rpc::TemplateApiClient::authorize_node(

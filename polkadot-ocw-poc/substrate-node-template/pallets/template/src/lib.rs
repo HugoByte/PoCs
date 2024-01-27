@@ -15,6 +15,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
 	b"pallet_template::pending_authorized_conduit_nodes";
+pub const PUBLIC_ENDPOINT_STORAGE: &[u8] = b"pallet_template::public_endpoint";
 
 pub mod crypto {
 	use super::KEY_TYPE;

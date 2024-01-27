@@ -6,7 +6,7 @@ pub struct ExtendedRunCmd {
 	pub base: RunCmd,
 
 	#[clap(long = "provider-url")]
-	pub provider_url: String,
+	pub provider_url: Option<String>,
 
 	#[clap(long = "request-id")]
 	pub request_id: Option<u64>,
