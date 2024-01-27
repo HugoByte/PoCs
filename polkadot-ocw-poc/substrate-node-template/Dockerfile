@@ -8,20 +8,16 @@ FROM docker.io/library/ubuntu:20.04
 
 COPY --from=builder /substrate/target/release/node-template /usr/local/bin
 
-RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
-	mkdir -p /data /substrate/.local/share/substrate && \
-	chown -R substrate:substrate /data && \
-	ln -s /data /substrate/.local/share/substrate && \
-	ldd /usr/local/bin/node-template && \
-	/usr/local/bin/node-template --version
+RUN useradd -m -u 1000 -U -s /bin/sh -d /node node && \
+	mkdir -p /node/.local/share/node && \
+	chown -R node:node /node/.local
 
-RUN chown substrate:substrate /usr/local/bin/node-template
+RUN chown node:node /usr/local/bin/node-template
 RUN chmod +x /usr/local/bin/node-template
 
-USER substrate
+USER node
 
 EXPOSE 30333 9933 9944 9615
-VOLUME ["/data"]
 
 ENTRYPOINT ["/usr/local/bin/node-template"]
 
