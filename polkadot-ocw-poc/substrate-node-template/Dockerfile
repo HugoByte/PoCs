@@ -16,14 +16,13 @@ RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
 	rm -rf /usr/bin /usr/sbin && \
 	/usr/local/bin/node-template --version
 
-USER substrate
-
 RUN chown substrate:substrate /usr/local/bin/node-template
 RUN chmod +x /usr/local/bin/node-template
 
+USER substrate
 
 EXPOSE 30333 9933 9944 9615
 VOLUME ["/data"]
 
-CMD ["/usr/local/bin/node-template"]
+ENTRYPOINT ["/usr/local/bin/node-template"]
 

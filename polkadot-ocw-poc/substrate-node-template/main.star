@@ -1,10 +1,10 @@
-def run(plan):
+def run(plan, node_type = "conduit"):
     plan.add_service(
-        name = "decentralwiz",
+        name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = ImageBuildSpec(
-                image_name = "hugobyte/decentralwiz",
-                build_context_dir = ".",
-            ),
+            image = "hugobyte/polkadot-ocw-poc",
+            ports = {
+                "http": PortSpec(number = 9944),
+            },
         ),
     )
