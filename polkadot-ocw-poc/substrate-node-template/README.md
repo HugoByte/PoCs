@@ -162,3 +162,8 @@ To get all the correct dependencies, activate direnv `direnv allow`.
 ### Docker
 
 Please follow the [Substrate Docker instructions here](https://github.com/paritytech/substrate/blob/master/docker/README.md) to build the Docker container with the Substrate Node Template binary.
+
+## Node Types
+- provider
+- conduit
+- validator
