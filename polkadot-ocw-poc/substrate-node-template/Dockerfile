@@ -13,7 +13,6 @@ RUN useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
 	chown -R substrate:substrate /data && \
 	ln -s /data /substrate/.local/share/substrate && \
 	ldd /usr/local/bin/node-template && \
-	rm -rf /usr/bin /usr/sbin && \
 	/usr/local/bin/node-template --version
 
 RUN chown substrate:substrate /usr/local/bin/node-template
