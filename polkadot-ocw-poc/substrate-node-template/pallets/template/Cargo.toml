@@ -16,15 +16,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "2.10.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.10.0", default-features = false, features = ["derive", "serde"] }
 frame-benchmarking = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false, optional = true }
 frame-support = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 frame-system = { version = "4.0.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 sp-std = { version = "8.0.0", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
-
+serde_json = { version = "1.0.111", default-features = false, features = ["alloc"] }
 sp-runtime-interface = { version = "17.0.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sp-externalities = { version = "0.19.0", default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0"  }
-
+serde = { version = "1.0.111", features = ["derive"], default-features = false }
 log = { version = "0.4.17", default-features = false }
 tokio = { version = "1", default-features = false, optional = true }
 kurtosis-sdk = { version = "0.86.4", optional = true }
@@ -40,7 +40,7 @@ impl_new = "0.2.0"
 parking_lot = "0.12.1"
 sp-keystore = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 env_logger = "0.9"
-sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
 [features]
 default = ["std"]
@@ -56,9 +56,10 @@ std = [
 	"sp-std/std",
 	"sp-externalities/std",
 	"log/std",
+	"serde_json/std",
 	"tokio",
 	"kurtosis-sdk",
-	"tonic"
+	"tonic",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

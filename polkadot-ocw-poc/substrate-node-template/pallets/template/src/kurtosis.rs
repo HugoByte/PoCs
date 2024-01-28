@@ -1,4 +1,7 @@
+use codec::{Codec, Decode, Encode};
 use frame_support::traits::IsType;
+use scale_info::prelude::string::String;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use futures::{
@@ -18,6 +21,9 @@ use kurtosis_sdk::{
 };
 
 #[cfg(feature = "std")]
+use sp_core::offchain::{OffchainDbExt, StorageKind};
+
+#[cfg(feature = "std")]
 use sp_core::traits::SpawnNamed;
 
 #[cfg(feature = "std")]
@@ -26,20 +32,36 @@ use sp_externalities::ExternalitiesExt;
 use sp_runtime::WeakBoundedVec;
 #[cfg(feature = "std")]
 use tokio::sync::Notify;
+
 #[cfg(feature = "std")]
 use tokio::time::{sleep, Duration};
 
 use core::{future::IntoFuture, pin::Pin};
-pub use sp_core::ConstU32;
+use sp_core::ConstU32;
 use sp_runtime_interface::runtime_interface;
 use sp_std::{any::Any, boxed::Box, sync::Arc};
 
 #[cfg(feature = "std")]
 use async_trait::async_trait;
 
+use crate::RequestId;
+
 #[cfg(feature = "std")]
 pub trait KurtosisClientTrait: Any + Send + Sync {
 	fn as_any(&self) -> &dyn Any;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct NodeArgs {
+	request_id: u64,
+	provider_url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PackageParams {
+	node_type: String,
+	node_args: NodeArgs,
+	bootnodes: String,
 }
 
 #[cfg(feature = "std")]
@@ -240,7 +262,7 @@ pub type HostFunctions = (kurtosis::HostFunctions,);
 
 #[runtime_interface]
 pub trait Kurtosis {
-	fn create_enclave(&mut self) {
+	fn create_enclave(&mut self, request_id: RequestId) {
 		#[cfg(not(test))]
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -270,8 +292,6 @@ pub trait Kurtosis {
 			});
 
 			rt.block_on(async {
-				sleep(Duration::from_secs(20)).await;
-
 				let enclave_port = response
 					.enclave_info
 					.expect("Enclave info must be present")
@@ -281,19 +301,34 @@ pub trait Kurtosis {
 
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
-				>::new_with_api_container(
-					enclave_port, spawner
-				);
+				>::new_with_api_container(enclave_port, spawner);
 
 				api_container_service.initialize();
+
+				let offchain_db_ext = self.extension::<OffchainDbExt>().unwrap();
+				let endpoint: String = offchain_db_ext
+					.local_storage_get(StorageKind::PERSISTENT, crate::PUBLIC_ENDPOINT_STORAGE)
+					.and_then(|bytes| Decode::decode(&mut &bytes[..]).ok())
+					.unwrap();
+
+				let bootnodes: String = offchain_db_ext
+					.local_storage_get(StorageKind::PERSISTENT, crate::BOOTNODES_STORAGE)
+					.and_then(|bytes| Decode::decode(&mut &bytes[..]).ok())
+					.unwrap();
+
+				let package_params = PackageParams {
+					node_type: "conduit".to_string(),
+					node_args: NodeArgs { provider_url: endpoint, request_id },
+					bootnodes,
+				};
 
 				let mut result = api_container_service
 					.with_client(|mut client| async move {
 						client
 							.run_starlark_package(RunStarlarkPackageArgs {
-								package_id: "github.com/hugobyte/polkadot-kurtosis-package".to_string(),
+								package_id: "github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template".to_string(),
 								parallelism: Some(4),
-								serialized_params: Some(r#"{ "chain_type": "localnet", "relaychain": { "name": "rococo-local", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false }, { "name": "bob", "node_type": "full", "prometheus": true } ] }, "parachains": [ { "name":"frequency", "nodes": [ { "name": "alice", "node_type": "validator", "prometheus": false } ] } ], "explorer": true }"#.to_string()),
+								serialized_params: Some(serde_json::to_string(&package_params).unwrap()),
 								dry_run: None,
 								clone_package: Some(true),
 								relative_path_to_main_file: Some("./main.star".to_string()),

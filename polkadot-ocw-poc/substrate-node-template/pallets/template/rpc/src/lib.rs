@@ -5,16 +5,19 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
-use pallet_template::{RequestId, PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE, PUBLIC_ENDPOINT_STORAGE};
+use pallet_template::{RequestId, PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE, PUBLIC_ENDPOINT_STORAGE, BOOTNODES_STORAGE};
 use parking_lot::RwLock;
 use sc_rpc_api::DenyUnsafe;
 use sp_core::offchain::OffchainStorage;
 use std::{collections::BTreeMap, sync::Arc};
+use sc_network::{config::MultiaddrWithPeerId, multiaddr::Protocol};
 
 #[rpc(client, server)]
 pub trait TemplateApi<AccountId> {
 	#[method(name = "template_authorizeNode")]
 	fn authorize_node(&self, account: AccountId, request_id: RequestId) -> RpcResult<()>;
+	#[method(name = "template_setBootnodes")]
+	fn set_bootnodes(&self, address: String) -> RpcResult<()>;
 	#[method(name = "template_setPublicEndpoint")]
 	fn set_public_endpoint(&self, endpoint: String) -> RpcResult<()>;
 }
@@ -67,6 +70,22 @@ where
 		self.storage.write().set(
 			sp_offchain::STORAGE_PREFIX,
             PUBLIC_ENDPOINT_STORAGE,
+            &serialized,
+        );
+
+        Ok(())
+	}
+
+	fn set_bootnodes(&self, address: String) -> RpcResult<()> {
+		self.deny_unsafe.check_if_safe()?;
+
+		MultiaddrWithPeerId::try_from(address.clone()).map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
+
+		let serialized = address.encode();
+
+		self.storage.write().set(
+			sp_offchain::STORAGE_PREFIX,
+            BOOTNODES_STORAGE,
             &serialized,
         );
 

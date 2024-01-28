@@ -16,6 +16,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
 	b"pallet_template::pending_authorized_conduit_nodes";
 pub const PUBLIC_ENDPOINT_STORAGE: &[u8] = b"pallet_template::public_endpoint";
+pub const BOOTNODES_STORAGE: &[u8] = b"pallet_template::bootnodes";
 
 pub mod crypto {
 	use super::KEY_TYPE;
@@ -415,7 +416,7 @@ pub mod pallet {
 		pub fn handle_enclave_request_acknowledged(id: RequestId) {
 			Self::acknowledged_request_with_authorization(id, |request, signer| {
 				match request.params.action {
-					EnclaveAction::CreateEnclave {} => kurtosis::kurtosis::create_enclave(),
+					EnclaveAction::CreateEnclave {} => kurtosis::kurtosis::create_enclave(id),
 					EnclaveAction::SetupEnclave {} => {
 						if let Ok(()) = kurtosis::kurtosis::setup_enclave(request.params.script)
 						{

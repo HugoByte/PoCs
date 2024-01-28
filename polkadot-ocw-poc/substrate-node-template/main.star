@@ -1,5 +1,5 @@
 def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
-    commands = ["--unsafe-rpc-external", "--" + node_type]
+    commands = ["--rpc-cors", "all", "--chain", "/data/customSpec.json", "--unsafe-rpc-external", "--" + node_type]
 
     if bootnodes != None:
         commands.extend([
@@ -8,7 +8,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     artifact_name = plan.upload_files(
-        src = "github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template/customSpec.json",
+        src = "./customSpec.json",
         name = "chain-spec",
     )
 
@@ -19,22 +19,20 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
 
         enclave_port = node_args.get("enclave_port", 9774)
         commands.extend([
-            "--request_id",
-            str(node_args["request_id"]),
-            "--enclave_port",
-            str(enclave_port),
+            "--request-id",
+            node_args["request_id"],
+            "--enclave-port",
+            enclave_port,
+            "--provider-url",
+            str(node_args["provider_url"]),
         ])
-    elif node_args != None:
-        for key, value in node_args.items():
-            commands.extend(["--" + key, str(value)])
 
     plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = "hugobyte/polkadot-ocw-poc:0.0.3",
+            image = "hugobyte/polkadot-ocw-poc:0.0.4",
             ports = {
                 "ws": PortSpec(9944, transport_protocol = "TCP"),
-                "rpc": PortSpec(9947, transport_protocol = "TCP"),
                 "lib2lib": PortSpec(30333, transport_protocol = "TCP"),
             },
             cmd = commands,
@@ -48,14 +46,13 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         plan.exec(
             service_name = "polkadot-ocw-poc",
             recipe = ExecRecipe(
-                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme Sr25519", "--suri {0}".format(node_args["seed"]), "--key-type aura", "--chain /data/customSpec.json"],
+                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Sr25519", "--suri", "{0}".format(node_args["seed"]), "--key-type", "aura", "--chain", "/data/customSpec.json"],
             ),
         )
 
         plan.exec(
             service_name = "polkadot-ocw-poc",
             recipe = ExecRecipe(
-                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme Ed25519", "--suri {0}".format(node_args["seed"]), "--key-type gran", "--chain /data/customSpec.json"],
+                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Ed25519", "--suri", "{0}".format(node_args["seed"]), "--key-type", "gran", "--chain", "/data/customSpec.json"],
             ),
         )
-
