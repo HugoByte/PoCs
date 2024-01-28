@@ -8,7 +8,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     artifact_name = plan.upload_files(
-        src = "github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template/customSpec.json",
+        src = "./customSpec.json",
         name = "chain-spec",
     )
 
@@ -30,7 +30,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
     plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = "hugobyte/polkadot-ocw-poc:0.0.3",
+            image = "hugobyte/polkadot-ocw-poc:0.0.4",
             ports = {
                 "ws": PortSpec(9944, transport_protocol = "TCP"),
                 "lib2lib": PortSpec(30333, transport_protocol = "TCP"),
