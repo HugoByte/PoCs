@@ -7,7 +7,7 @@ description = 'RPC methods for the template pallet'
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = [
 	"derive",
-] }
+]}
 jsonrpsee = { version = "0.16.2", features = ["client-core", "macros", "server"] }
 parking_lot = "0.12.1"
 
@@ -20,4 +20,6 @@ sp-keystore = { default-features = false, git = "https://github.com/paritytech/p
 sc-transaction-pool-api = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sc-rpc-api = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
 sp-offchain = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0" }
+sc-network = { version = "0.10.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
+
 pallet-template = { version = "4.0.0-dev", default-features = false, path = "../" }
