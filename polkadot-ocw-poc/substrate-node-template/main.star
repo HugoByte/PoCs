@@ -25,6 +25,14 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             enclave_port,
             "--provider-url",
             str(node_args["provider_url"]),
+            "--offchain-worker",
+            "always",
+        ])
+        
+    if node_type == "provider":
+        commands.extend([
+            "--offchain-worker",
+            "always",
         ])
 
     plan.add_service(
