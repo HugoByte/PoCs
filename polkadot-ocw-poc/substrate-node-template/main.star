@@ -30,7 +30,10 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     if node_type == "provider":
+        enclave_port = node_args.get("enclave_port", 9774)
         commands.extend([
+            "--enclave-port",
+            enclave_port,
             "--offchain-worker",
             "always",
         ])
