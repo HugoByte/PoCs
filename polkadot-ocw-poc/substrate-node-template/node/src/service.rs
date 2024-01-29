@@ -174,6 +174,7 @@ pub fn new_full(
 
 		if provider {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(
+				enclave_port.expect("enclave port not provided"),
 				task_manager.spawn_handle(),
 			);
 			client.initialize();
