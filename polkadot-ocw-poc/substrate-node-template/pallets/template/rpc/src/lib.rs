@@ -39,7 +39,6 @@ where
 	AccountId: Clone + Display + Codec + Send + std::cmp::PartialEq + 'static,
 {
 	fn authorize_node(&self, account: AccountId, request_id: RequestId) -> RpcResult<()> {
-		self.deny_unsafe.check_if_safe()?;
 		let account = account.clone();
 
 		let mut pending_authorized_nodes: BTreeMap<RequestId, AccountId> = self
@@ -63,8 +62,6 @@ where
 	}
 
 	fn set_public_endpoint(&self, endpoint: String) -> RpcResult<()> {
-		self.deny_unsafe.check_if_safe()?;
-
 		let serialized = endpoint.encode();
 
 		self.storage.write().set(
