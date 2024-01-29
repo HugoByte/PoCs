@@ -28,7 +28,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             "--offchain-worker",
             "always",
         ])
-        
+
     if node_type == "provider":
         commands.extend([
             "--offchain-worker",
@@ -62,5 +62,13 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             service_name = "polkadot-ocw-poc",
             recipe = ExecRecipe(
                 command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Ed25519", "--suri", "{0}".format(node_args["seed"]), "--key-type", "gran", "--chain", "/data/customSpec.json"],
+            ),
+        )
+
+    if node_type == "provider":
+        plan.exec(
+            service_name = "polkadot-ocw-poc",
+            recipe = ExecRecipe(
+                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Sr25519", "--suri", "{0}".format(node_args["seed"]), "--key-type", "demo"],
             ),
         )
