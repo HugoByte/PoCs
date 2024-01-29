@@ -109,8 +109,8 @@ impl KurtosisContainer {
 
 #[cfg(feature = "std")]
 impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_engine(port: u32, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
-		let future = async move { EngineServiceClient::connect(format!("https://[::1]:{}", port)).await };
+	pub fn new_with_engine(engine_host: String, port: u32, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
+		let future = async move { EngineServiceClient::connect(format!("{}:{}", engine_host, port)).await };
 
 		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),

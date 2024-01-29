@@ -17,6 +17,9 @@ pub struct ExtendedRunCmd {
     #[clap(long = "enclave-port")]
 	pub enclave_port: Option<u32>,
 
+	#[clap(long = "engine-host")]
+	pub engine_host: Option<String>,
+
 	#[clap(long)]
 	pub provider: bool,
 }

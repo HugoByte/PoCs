@@ -128,6 +128,7 @@ pub fn new_full(
 	conduit: bool,
 	enclave_port: Option<u32>,
 	is_dev: bool,
+	engine_host: Option<String>,
 ) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -174,6 +175,7 @@ pub fn new_full(
 
 		if provider {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(
+				engine_host.expect("engine host not provided"),
 				enclave_port.expect("enclave port not provided"),
 				task_manager.spawn_handle(),
 			);
