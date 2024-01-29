@@ -74,8 +74,6 @@ where
 	}
 
 	fn set_bootnodes(&self, address: String) -> RpcResult<()> {
-		self.deny_unsafe.check_if_safe()?;
-
 		MultiaddrWithPeerId::try_from(address.clone()).map_err(|e| JsonRpseeError::Custom(e.to_string()))?;
 
 		let serialized = address.encode();
