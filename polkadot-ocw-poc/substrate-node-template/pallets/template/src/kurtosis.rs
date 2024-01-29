@@ -109,8 +109,13 @@ impl KurtosisContainer {
 
 #[cfg(feature = "std")]
 impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_engine(engine_host: String, port: u32, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
-		let future = async move { EngineServiceClient::connect(format!("{}:{}", engine_host, port)).await };
+	pub fn new_with_engine(
+		engine_host: String,
+		port: u32,
+		spawner: impl SpawnNamed + 'static,
+	) -> Arc<Self> {
+		let future =
+			async move { EngineServiceClient::connect(format!("{}:{}", engine_host, port)).await };
 
 		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
@@ -129,9 +134,16 @@ impl KurtosisClientTrait for KurtosisClient<EngineServiceClient<tonic::transport
 
 #[cfg(feature = "std")]
 impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_api_container(port: u32, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
+	pub fn new_with_api_container(
+		host: Option<String>,
+		port: u32,
+		spawner: impl SpawnNamed + 'static,
+	) -> Arc<Self> {
 		let future = async move {
-			ApiContainerServiceClient::connect(format!("https://[::1]:{}", port)).await
+			ApiContainerServiceClient::connect(
+				format!("https://{}:{}", host.or(Some("[::1]".to_string())).unwrap(), port),
+			)
+			.await
 		};
 
 		Arc::new(Self {
@@ -292,16 +304,15 @@ pub trait Kurtosis {
 			});
 
 			rt.block_on(async {
-				let enclave_port = response
+				let enclave = response
 					.enclave_info
 					.expect("Enclave info must be present")
-					.api_container_host_machine_info
-					.expect("Enclave host machine info must be present")
-					.grpc_port_on_host_machine;
+					.api_container_info
+					.expect("Enclave info must be present");
 
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
-				>::new_with_api_container(enclave_port, spawner);
+				>::new_with_api_container(Some(enclave.ip_inside_enclave), enclave.grpc_port_inside_enclave, spawner);
 
 				api_container_service.initialize();
 

@@ -197,6 +197,7 @@ pub fn new_full(
 
 		if conduit {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_api_container(
+				None,
 				enclave_port.expect("enclave port not provided"),
 				task_manager.spawn_handle(),
 			);
