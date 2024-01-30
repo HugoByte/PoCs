@@ -8,7 +8,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     artifact_name = plan.upload_files(
-        src = "github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template/customSpec.json",
+        src = "./customSpec.json",
         name = "chain-spec",
     )
 

@@ -141,9 +141,11 @@ impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 		spawner: impl SpawnNamed + 'static,
 	) -> Arc<Self> {
 		let future = async move {
-			ApiContainerServiceClient::connect(
-				format!("https://{}:{}", host.or(Some("[::1]".to_string())).unwrap(), port),
-			)
+			ApiContainerServiceClient::connect(format!(
+				"{}:{}",
+				host.or(Some("https://[::1]".to_string())).unwrap(),
+				port
+			))
 			.await
 		};
 
@@ -313,7 +315,11 @@ pub trait Kurtosis {
 
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
-				>::new_with_api_container(Some(enclave.ip_inside_enclave.clone()), enclave.grpc_port_inside_enclave, spawner);
+				>::new_with_api_container(
+					Some(enclave.ip_inside_enclave.clone()),
+					enclave.grpc_port_inside_enclave,
+					spawner,
+				);
 
 				api_container_service.initialize();
 
@@ -330,7 +336,11 @@ pub trait Kurtosis {
 
 				let package_params = PackageParams {
 					node_type: "conduit".to_string(),
-					node_args: NodeArgs { provider_url: endpoint, request_id, api_container_host: enclave.ip_inside_enclave },
+					node_args: NodeArgs {
+						provider_url: endpoint,
+						request_id,
+						api_container_host: format!("https://{}", enclave.ip_inside_enclave),
+					},
 					bootnodes,
 				};
 
