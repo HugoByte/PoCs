@@ -17,7 +17,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             plan.print("Error: For conduit node_type, node_args must include 'request_id'.")
             return
 
-        enclave_port = node_args.get("enclave_port", 9774)
+        enclave_port = node_args.get("enclave_port", 7443)
         commands.extend([
             "--request-id",
             str(node_args["request_id"]),
@@ -45,7 +45,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
     service = plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = "hugobyte/polkadot-ocw-poc:0.1.4",
+            image = "hugobyte/polkadot-ocw-poc:0.1.5",
             ports = {
                 "ws": PortSpec(9944, transport_protocol = "TCP"),
                 "lib2lib": PortSpec(30333, transport_protocol = "TCP"),

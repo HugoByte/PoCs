@@ -217,10 +217,17 @@ pub fn new_full(
 					.build(provider_url.expect("provider url not provided"))
 					.unwrap();
 
-				let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
-					&client,
-					key,
-					request_id.expect("request_id not provided"),
+				task_manager.spawn_handle().spawn(
+					"conduit-authorize-node",
+					None,
+					Box::pin(async move {
+						let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
+							&client,
+							key,
+							request_id.expect("request_id not provided"),
+						)
+						.await;
+					}),
 				);
 			};
 		}
