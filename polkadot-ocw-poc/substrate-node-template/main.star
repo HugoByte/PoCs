@@ -8,7 +8,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     artifact_name = plan.upload_files(
-        src = "./customSpec.json",
+        src = "github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template/customSpec.json",
         name = "chain-spec",
     )
 
@@ -20,9 +20,9 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         enclave_port = node_args.get("enclave_port", 9774)
         commands.extend([
             "--request-id",
-            node_args["request_id"],
+            str(node_args["request_id"]),
             "--enclave-port",
-            enclave_port,
+            str(enclave_port),
             "--provider-url",
             str(node_args["provider_url"]),
             "--offchain-worker",
@@ -30,10 +30,12 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     if node_type == "provider":
-        enclave_port = node_args.get("enclave_port", 9774)
+        enclave_port = node_args.get("enclave_port", 9710)
         commands.extend([
+            "--engine-host",
+            str(node_args["engine_host"]),
             "--enclave-port",
-            enclave_port,
+            str(enclave_port),
             "--offchain-worker",
             "always",
         ])
@@ -41,7 +43,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
     plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = "hugobyte/polkadot-ocw-poc:0.0.5",
+            image = "hugobyte/polkadot-ocw-poc:0.1.0",
             ports = {
                 "ws": PortSpec(9944, transport_protocol = "TCP"),
                 "lib2lib": PortSpec(30333, transport_protocol = "TCP"),
