@@ -20,6 +20,9 @@ pub struct ExtendedRunCmd {
 	#[clap(long = "engine-host")]
 	pub engine_host: Option<String>,
 
+	#[clap(long = "api-container-host")]
+	pub api_container_host: Option<String>,
+
 	#[clap(long)]
 	pub provider: bool,
 }

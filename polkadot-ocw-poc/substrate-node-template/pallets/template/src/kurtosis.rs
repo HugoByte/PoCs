@@ -55,6 +55,7 @@ pub trait KurtosisClientTrait: Any + Send + Sync {
 pub struct NodeArgs {
 	request_id: u64,
 	provider_url: String,
+	api_container_host: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -312,7 +313,7 @@ pub trait Kurtosis {
 
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
-				>::new_with_api_container(Some(enclave.ip_inside_enclave), enclave.grpc_port_inside_enclave, spawner);
+				>::new_with_api_container(Some(enclave.ip_inside_enclave.clone()), enclave.grpc_port_inside_enclave, spawner);
 
 				api_container_service.initialize();
 
@@ -329,7 +330,7 @@ pub trait Kurtosis {
 
 				let package_params = PackageParams {
 					node_type: "conduit".to_string(),
-					node_args: NodeArgs { provider_url: endpoint, request_id },
+					node_args: NodeArgs { provider_url: endpoint, request_id, api_container_host: enclave.ip_inside_enclave },
 					bootnodes,
 				};
 

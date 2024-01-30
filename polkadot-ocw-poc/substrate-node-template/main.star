@@ -25,6 +25,8 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             str(enclave_port),
             "--provider-url",
             str(node_args["provider_url"]),
+            "--api-container-host",
+            str(node_args["api_container_host"]),
             "--offchain-worker",
             "always",
         ])
@@ -40,7 +42,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             "always",
         ])
 
-    plan.add_service(
+    service = plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
             image = "hugobyte/polkadot-ocw-poc:0.1.0",

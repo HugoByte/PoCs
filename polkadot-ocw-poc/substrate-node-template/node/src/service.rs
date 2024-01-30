@@ -129,6 +129,7 @@ pub fn new_full(
 	enclave_port: Option<u32>,
 	is_dev: bool,
 	engine_host: Option<String>,
+	api_container_host: Option<String>,
 ) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -197,7 +198,7 @@ pub fn new_full(
 
 		if conduit {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_api_container(
-				None,
+				api_container_host,
 				enclave_port.expect("enclave port not provided"),
 				task_manager.spawn_handle(),
 			);
@@ -217,7 +218,9 @@ pub fn new_full(
 					.unwrap();
 
 				let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
-					&client, key, request_id.expect("request_id not provided"),
+					&client,
+					key,
+					request_id.expect("request_id not provided"),
 				);
 			};
 		}
