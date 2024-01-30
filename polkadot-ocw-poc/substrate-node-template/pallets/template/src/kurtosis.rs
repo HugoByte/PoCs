@@ -316,7 +316,7 @@ pub trait Kurtosis {
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
 				>::new_with_api_container(
-					Some(enclave.ip_inside_enclave.clone()),
+					Some(format!("https://{}", enclave.ip_inside_enclave.clone())),
 					enclave.grpc_port_inside_enclave,
 					spawner,
 				);
