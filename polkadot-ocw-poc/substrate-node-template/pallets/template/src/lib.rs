@@ -13,6 +13,7 @@ pub use sp_core::ConstU32;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
 use sp_runtime::traits::StaticLookup;
+use sp_runtime::SaturatedConversion;
 
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
@@ -330,7 +331,7 @@ pub mod pallet {
 								let _ = Balances::<T>::transfer_keep_alive(
 									OriginFor::<T>::from(Some(who.clone()).into()),
 									T::Lookup::unlookup(handle.clone()),
-									T::Balance::from(1000u32),
+									(100 * 10u128.pow(12)).saturated_into(),
 								)?;
 
 								Self::create_enclave_request(
