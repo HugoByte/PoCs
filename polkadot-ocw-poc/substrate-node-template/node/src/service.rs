@@ -233,9 +233,20 @@ pub fn new_full(
 									.expect("Failed to build HTTP client");
 
 								let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
-									&client, key, request_id,
+									&client,
+									key.clone(),
+									request_id,
 								)
-								.await;
+								.await
+								.and_then(|_| {
+									log::info!(
+										"request to authorize: {} for request {}",
+										key,
+										request_id
+									);
+									
+									Ok(())
+								});
 							},
 							Ok(None) => log::warn!("key was not added within timeout period."),
 							Err(_) => log::error!("timeout occurred while waiting for the key."),

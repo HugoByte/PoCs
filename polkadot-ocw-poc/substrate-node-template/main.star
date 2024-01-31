@@ -39,7 +39,7 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
     service = plan.add_service(
         name = "polkadot-ocw-poc",
         config = ServiceConfig(
-            image = "hugobyte/polkadot-ocw-poc:0.1.8",
+            image = "hugobyte/polkadot-ocw-poc:0.2.0",
             ports = {
                 "ws": PortSpec(9944, transport_protocol = "TCP"),
                 "lib2lib": PortSpec(30333, transport_protocol = "TCP"),
@@ -52,17 +52,30 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
     )
 
     if node_type == "conduit":
-        key = plan.exec(
+        plan.exec(
             service_name = "polkadot-ocw-poc",
             recipe = ExecRecipe(
-                command = ["/usr/local/bin/node-template", "key", "generate", "--scheme", "Sr25519", "--output-type", "json"],
+                command = ["/bin/sh", "-c", "/usr/local/bin/node-template key generate --scheme Sr25519 --output-type json > /data/key.json"],
             ),
+        )
+
+        plan.store_service_files(
+            service_name = "polkadot-ocw-poc",
+            src = "/data/key.json",
+            name = "keys-artifact",
+        )
+
+        result = plan.run_sh(
+            run = "jq -r '.secretPhrase' /data/key.json | tr -d '\n'",
+            files = {
+                "/data": "keys-artifact",
+            },
         )
 
         plan.exec(
             service_name = "polkadot-ocw-poc",
             recipe = ExecRecipe(
-                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Sr25519", "--suri", "{0}".format(key.secretPhrase), "--key-type", "demo"],
+                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Sr25519", "--suri", result.output, "--key-type", "demo", "--chain", "/data/customSpec.json"],
             ),
         )
 
