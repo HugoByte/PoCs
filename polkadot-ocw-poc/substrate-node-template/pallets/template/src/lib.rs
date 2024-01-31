@@ -7,10 +7,12 @@ use frame_system::{
 	},
 	pallet_prelude::BlockNumberFor,
 };
+use pallet_balances::Pallet as Balances;
 use sp_core::crypto::{AccountId32, KeyTypeId};
 pub use sp_core::ConstU32;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
+use sp_runtime::traits::StaticLookup;
 
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
@@ -128,7 +130,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
+	pub trait Config:
+		CreateSignedTransaction<Call<Self>> + frame_system::Config + pallet_balances::Config
+	{
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type WeightInfo: WeightInfo;
@@ -323,6 +327,12 @@ pub mod pallet {
 
 								Enclaves::<T>::insert(&handle, enclave_info);
 
+								let _ = Balances::<T>::transfer_keep_alive(
+									OriginFor::<T>::from(Some(who.clone()).into()),
+									T::Lookup::unlookup(handle.clone()),
+									T::Balance::from(1000u32),
+								)?;
+
 								Self::create_enclave_request(
 									OriginFor::<T>::from(Some(who.clone()).into()),
 									Some(handle.to_owned()),
@@ -418,8 +428,7 @@ pub mod pallet {
 				match request.params.action {
 					EnclaveAction::CreateEnclave {} => kurtosis::kurtosis::create_enclave(id),
 					EnclaveAction::SetupEnclave {} => {
-						if let Ok(()) = kurtosis::kurtosis::setup_enclave(request.params.script)
-						{
+						if let Ok(()) = kurtosis::kurtosis::setup_enclave(request.params.script) {
 							let tx_results =
 								signer.send_signed_transaction(|_| Call::process_enclave_request {
 									request_id: id,

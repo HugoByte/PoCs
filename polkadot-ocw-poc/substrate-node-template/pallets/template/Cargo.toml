@@ -34,6 +34,7 @@ sp-core = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polka
 sp-io = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 async-trait = "0.1.77"
+pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
 [dev-dependencies]
 impl_new = "0.2.0"
@@ -45,6 +46,7 @@ sp-offchain = { git = "https://github.com/paritytech/polkadot-sdk.git", tag = "p
 [features]
 default = ["std"]
 std = [
+	"pallet-balances/std",
 	"codec/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
