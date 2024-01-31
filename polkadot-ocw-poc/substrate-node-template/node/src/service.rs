@@ -126,7 +126,6 @@ pub fn new_full(
 	request_id: Option<u64>,
 	provider: bool,
 	conduit: bool,
-	enclave_port: Option<u32>,
 	is_dev: bool,
 	engine_host: Option<String>,
 	api_container_host: Option<String>,
@@ -176,8 +175,7 @@ pub fn new_full(
 
 		if provider {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(
-				engine_host.expect("engine host not provided"),
-				enclave_port.expect("enclave port not provided"),
+				engine_host,
 				task_manager.spawn_handle(),
 			);
 			client.initialize();
@@ -199,7 +197,6 @@ pub fn new_full(
 		if conduit {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_api_container(
 				api_container_host,
-				enclave_port.expect("enclave port not provided"),
 				task_manager.spawn_handle(),
 			);
 			client.initialize();
@@ -207,12 +204,14 @@ pub fn new_full(
 			kurtosis_clients
 				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
 
-			if let Ok(key) = keystore_container
+			let key = keystore_container
 				.keystore()
-				.sr25519_generate_new(pallet_template::KEY_TYPE, None)
-			{
-				let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
+				.sr25519_public_keys(pallet_template::KEY_TYPE)
+				.last()
+				.expect("no conduit key added")
+				.clone();
 
+			if !is_dev {
 				let client = jsonrpsee::http_client::HttpClientBuilder::default()
 					.build(provider_url.expect("provider url not provided"))
 					.unwrap();
@@ -229,7 +228,7 @@ pub fn new_full(
 						.await;
 					}),
 				);
-			};
+			}
 		}
 
 		task_manager.spawn_handle().spawn(

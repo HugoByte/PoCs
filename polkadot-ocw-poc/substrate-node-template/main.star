@@ -17,12 +17,9 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             plan.print("Error: For conduit node_type, node_args must include 'request_id'.")
             return
 
-        enclave_port = node_args.get("enclave_port", 7443)
         commands.extend([
             "--request-id",
             str(node_args["request_id"]),
-            "--enclave-port",
-            str(enclave_port),
             "--provider-url",
             str(node_args["provider_url"]),
             "--api-container-host",
@@ -32,12 +29,9 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
         ])
 
     if node_type == "provider":
-        enclave_port = node_args.get("enclave_port", 9710)
         commands.extend([
             "--engine-host",
             str(node_args["engine_host"]),
-            "--enclave-port",
-            str(enclave_port),
             "--offchain-worker",
             "always",
         ])
@@ -56,6 +50,21 @@ def run(plan, node_type = "conduit", node_args = None, bootnodes = None):
             },
         ),
     )
+
+    if node_type == "conduit":
+        key = plan.exec(
+            service_name = "polkadot-ocw-poc",
+            recipe = ExecRecipe(
+                command = ["/usr/local/bin/node-template", "key", "generate", "--scheme", "Sr25519", "--output-type", "json"],
+            ),
+        )
+
+        plan.exec(
+            service_name = "polkadot-ocw-poc",
+            recipe = ExecRecipe(
+                command = ["/usr/local/bin/node-template", "key", "insert", "--scheme", "Sr25519", "--suri", "{0}".format(key.secretPhrase), "--key-type", "demo"],
+            ),
+        )
 
     if node_type == "validator":
         plan.exec(

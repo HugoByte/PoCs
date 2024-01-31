@@ -11,11 +11,8 @@ pub struct ExtendedRunCmd {
 	#[clap(long = "request-id")]
 	pub request_id: Option<u64>,
 
-	#[clap(long, conflicts_with = "provider")]
+	#[clap(long)]
 	pub conduit: bool,
-
-    #[clap(long = "enclave-port")]
-	pub enclave_port: Option<u32>,
 
 	#[clap(long = "engine-host")]
 	pub engine_host: Option<String>,

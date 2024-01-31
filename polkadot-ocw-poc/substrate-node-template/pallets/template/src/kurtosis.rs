@@ -110,13 +110,10 @@ impl KurtosisContainer {
 
 #[cfg(feature = "std")]
 impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_engine(
-		engine_host: String,
-		port: u32,
-		spawner: impl SpawnNamed + 'static,
-	) -> Arc<Self> {
-		let future =
-			async move { EngineServiceClient::connect(format!("{}:{}", engine_host, port)).await };
+	pub fn new_with_engine(host: Option<String>, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
+		let future = async move {
+			EngineServiceClient::connect(host.unwrap_or("https://[::1]:9710".to_string())).await
+		};
 
 		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
@@ -137,15 +134,12 @@ impl KurtosisClientTrait for KurtosisClient<EngineServiceClient<tonic::transport
 impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 	pub fn new_with_api_container(
 		host: Option<String>,
-		port: u32,
 		spawner: impl SpawnNamed + 'static,
 	) -> Arc<Self> {
 		let future = async move {
-			ApiContainerServiceClient::connect(format!(
-				"{}:{}",
-				host.or(Some("https://[::1]".to_string())).unwrap(),
-				port
-			))
+			ApiContainerServiceClient::connect(
+				host.unwrap_or("https://[::1]:7443".to_string()),
+			)
 			.await
 		};
 
@@ -316,8 +310,11 @@ pub trait Kurtosis {
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
 				>::new_with_api_container(
-					Some(format!("https://{}", enclave.ip_inside_enclave.clone())),
-					enclave.grpc_port_inside_enclave,
+					Some(format!(
+						"https://{}:{}",
+						enclave.ip_inside_enclave.clone(),
+						enclave.grpc_port_inside_enclave.clone()
+					)),
 					spawner,
 				);
 
@@ -339,7 +336,11 @@ pub trait Kurtosis {
 					node_args: NodeArgs {
 						provider_url: endpoint,
 						request_id,
-						api_container_host: format!("https://{}", enclave.ip_inside_enclave),
+						api_container_host: format!(
+							"https://{}:{}",
+							enclave.ip_inside_enclave.clone(),
+							enclave.grpc_port_inside_enclave.clone()
+						),
 					},
 					bootnodes,
 				};

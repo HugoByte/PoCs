@@ -184,13 +184,12 @@ pub fn run() -> sc_cli::Result<()> {
 			let request_id = cli.run.request_id.clone();
 			let provider = cli.run.provider;
 			let conduit = cli.run.conduit;
-			let enclave_port = cli.run.enclave_port;
 			let engine_host = cli.run.engine_host;
 			let api_container_host = cli.run.api_container_host;
 			let is_dev = cli.run.base.is_dev().unwrap_or_default();
 
 			runner.run_node_until_exit(|config| async move {
-				service::new_full(config, provider_url, request_id, provider, conduit, enclave_port, is_dev, engine_host, api_container_host).map_err(sc_cli::Error::Service)
+				service::new_full(config, provider_url, request_id, provider, conduit, is_dev, engine_host, api_container_host).map_err(sc_cli::Error::Service)
 			})
 		},
 	}
