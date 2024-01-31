@@ -204,28 +204,42 @@ pub fn new_full(
 			kurtosis_clients
 				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
 
-			let key = keystore_container
-				.keystore()
-				.sr25519_public_keys(pallet_template::KEY_TYPE)
-				.last()
-				.expect("no conduit key added")
-				.clone();
+			let keystore = keystore_container.keystore().clone();
+			let provider_url = provider_url.expect("provider url not provided");
+			let request_id = request_id.expect("request_id not provided");
 
 			if !is_dev {
-				let client = jsonrpsee::http_client::HttpClientBuilder::default()
-					.build(provider_url.expect("provider url not provided"))
-					.unwrap();
+				use tokio::time::{sleep, timeout, Duration};
 
 				task_manager.spawn_handle().spawn(
 					"conduit-authorize-node",
 					None,
 					Box::pin(async move {
-						let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
-							&client,
-							key,
-							request_id.expect("request_id not provided"),
-						)
-						.await;
+						let wait_for_key = async {
+							loop {
+								if let Some(key) =
+									keystore.sr25519_public_keys(pallet_template::KEY_TYPE).last()
+								{
+									break Some(key.clone());
+								}
+								sleep(Duration::from_secs(5)).await;
+							}
+						};
+
+						match timeout(Duration::from_secs(60), wait_for_key).await {
+							Ok(Some(key)) => {
+								let client = jsonrpsee::http_client::HttpClientBuilder::default()
+									.build(provider_url)
+									.expect("Failed to build HTTP client");
+
+								let _ = pallet_template_rpc::TemplateApiClient::authorize_node(
+									&client, key, request_id,
+								)
+								.await;
+							},
+							Ok(None) => log::warn!("key was not added within timeout period."),
+							Err(_) => log::error!("timeout occurred while waiting for the key."),
+						}
 					}),
 				);
 			}

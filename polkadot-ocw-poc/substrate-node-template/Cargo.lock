@@ -5199,6 +5199,7 @@ dependencies = [
  "frame-system",
  "futures",
  "jsonrpsee",
+ "log",
  "node-template-runtime",
  "pallet-template",
  "pallet-template-rpc",
