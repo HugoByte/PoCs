@@ -101,6 +101,7 @@ pub mod pallet {
 	pub enum Outcome<T> {
 		EnclaveCreated { handle: T },
 		EnclaveSetupCompleted {},
+		ExecutionInEnclaveCompleted { result: WeakBoundedVec<u8, ConstU32<{ u32::MAX }>> },
 	}
 
 	#[derive(
@@ -213,6 +214,11 @@ pub mod pallet {
 			handler: T::AccountId,
 			enclave_port: u32,
 		},
+		EnclaveExecutionOutput {
+			request_id: u64,
+			handle: T::AccountId,
+			output: String,
+		},
 		EnclaveStatusUpdated(EnclaveStatus),
 		IntializeDeployment {},
 		DeploymentCompleted {},
@@ -227,6 +233,8 @@ pub mod pallet {
 		NotAuthorizedHandler,
 		RequestNotFound,
 		EnclaveNotFound,
+		HandlerRequired,
+		NotAuthorizedUser,
 	}
 
 	#[pallet::call]
@@ -253,6 +261,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
+			if let EnclaveAction::CreateEnclave { .. } = params.action {
+			} else {
+				ensure!(handler.is_some(), Error::<T>::HandlerRequired);
+				
+				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap()).ok_or(Error::<T>::EnclaveNotFound)?;
+                ensure!(enclave_info.user == who, Error::<T>::NotAuthorizedUser);
+			};
+
 			let request_id = Self::next_request_id();
 			let request = EnclaveRequest { user: who, handler, params };
 
@@ -274,13 +290,11 @@ pub mod pallet {
 			EnclaveRequests::<T>::mutate_exists(request_id, |r| {
 				let request = r.as_mut().ok_or(Error::<T>::RequestNotFound)?;
 
-				ensure!(
-					request.handler.is_none() || *request.handler.as_ref().unwrap() == who,
-					Error::<T>::NotAuthorizedHandler
-				);
-
 				if let EnclaveAction::CreateEnclave { .. } = request.params.action {
+					ensure!(request.handler.is_none() || *request.handler.as_ref().unwrap() == who, Error::<T>::NotAuthorizedHandler);
 					ensure!(Providers::<T>::contains_key(&who), Error::<T>::NotAProvider);
+				} else {
+					ensure!(*request.handler.as_ref().unwrap() == who, Error::<T>::NotAuthorizedHandler);
 				}
 
 				let acknowledged_request = AcknowledgedRequest {
@@ -350,6 +364,21 @@ pub mod pallet {
 							EnclaveStatus::Active,
 						),
 						_ => Ok({}),
+					},
+					EnclaveAction::ExecuteInEnclave {} => match outcome {
+						Outcome::ExecutionInEnclaveCompleted { ref result } => {
+							Self::deposit_event(Event::EnclaveExecutionOutput {
+								handle: who.clone(),
+								request_id,
+								output: String::from_utf8(result.clone().into_inner()).map_err(|e| {
+									sp_runtime::DispatchError::Other(
+										"failed to deserialize to string",
+									)
+								})?,
+							});
+							Ok(())
+						},
+						_ => Ok(()),
 					},
 					_ => Ok(()),
 				};
@@ -432,6 +461,19 @@ pub mod pallet {
 								signer.send_signed_transaction(|_| Call::process_enclave_request {
 									request_id: id,
 									outcome: Outcome::EnclaveSetupCompleted {},
+								});
+						};
+					},
+					EnclaveAction::ExecuteInEnclave {} => {
+						if let Ok(ref result) =
+							kurtosis::kurtosis::execute_in_enclave(request.params.script)
+						{
+							let tx_results =
+								signer.send_signed_transaction(|_| Call::process_enclave_request {
+									request_id: id,
+									outcome: Outcome::ExecutionInEnclaveCompleted {
+										result: result.clone(),
+									},
 								});
 						};
 					},

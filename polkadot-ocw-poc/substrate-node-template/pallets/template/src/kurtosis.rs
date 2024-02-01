@@ -434,4 +434,63 @@ pub trait Kurtosis {
 
 		Ok(())
 	}
+
+	fn execute_in_enclave(
+		&mut self,
+		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
+	) -> Result<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>, ()> {
+		let mut results = Vec::new();
+
+		#[cfg(not(test))]
+		{
+			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+			let api_container_service =
+				self.extension::<KurtosisExt>().unwrap().api_container_service().unwrap();
+
+			rt.block_on(async {
+				let mut result = api_container_service
+					.with_client(|mut client| async move {
+						client
+							.run_starlark_script(RunStarlarkScriptArgs {
+								parallelism: Some(4),
+								serialized_script: String::from_utf8(
+									setup_script
+										.expect("Need script for setup")
+										.into_iter()
+										.collect(),
+								)
+								.unwrap_or_else(|_| String::from("Invalid UTF-8")),
+								serialized_params: Some("{}".to_string()),
+								dry_run: None,
+								main_function_name: Some("run".to_string()),
+								experimental_features: vec![],
+								cloud_instance_id: None,
+								cloud_user_id: None,
+								image_download_mode: None,
+							})
+							.await
+							.unwrap()
+							.into_inner()
+					})
+					.await
+					.unwrap()
+					.await;
+
+				while let Some(next_message) = result.message().await.unwrap() {
+					if let Some(line) = next_message.run_response_line {
+						match line {
+							InstructionResult(result) => {
+								results.extend_from_slice(
+									result.serialized_instruction_result.as_bytes(),
+								);
+							},
+							_ => (),
+						}
+					}
+				}
+			});
+		}
+
+		WeakBoundedVec::<u8, ConstU32<{ u32::MAX }>>::try_from(results).map_err(|_| ())
+	}
 }
