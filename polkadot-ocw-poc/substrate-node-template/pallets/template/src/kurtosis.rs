@@ -137,10 +137,8 @@ impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 		spawner: impl SpawnNamed + 'static,
 	) -> Arc<Self> {
 		let future = async move {
-			ApiContainerServiceClient::connect(
-				host.unwrap_or("https://[::1]:7443".to_string()),
-			)
-			.await
+			ApiContainerServiceClient::connect(host.unwrap_or("https://[::1]:7443".to_string()))
+				.await
 		};
 
 		Arc::new(Self {
@@ -407,7 +405,7 @@ pub trait Kurtosis {
 										.collect(),
 								)
 								.unwrap_or_else(|_| String::from("Invalid UTF-8")),
-								serialized_params: None,
+								serialized_params: Some("{}".to_string()),
 								dry_run: None,
 								main_function_name: Some("run".to_string()),
 								experimental_features: vec![],
