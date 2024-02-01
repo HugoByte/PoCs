@@ -12,6 +12,7 @@ use sp_core::crypto::{AccountId32, KeyTypeId};
 pub use sp_core::ConstU32;
 use sp_runtime::{offchain::storage::StorageValueRef, traits::StaticLookup, SaturatedConversion};
 use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
+use scale_info::prelude::string::String;
 
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
