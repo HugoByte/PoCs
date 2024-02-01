@@ -7,6 +7,7 @@ use sp_externalities::Externalities;
 use sp_keystore::Keystore;
 use sp_runtime::{offchain::storage::StorageValueRef, testing::TestXt};
 use sp_std::collections::btree_map::BTreeMap;
+use frame_support::traits::fungible::Mutate;
 
 fn events() -> Vec<Event<Test>> {
 	let result =
@@ -209,6 +210,12 @@ fn test_create_enclave_and_setup_enclave_works() {
 			let conduit_node = keystore.sr25519_public_keys(crate::KEY_TYPE)[1];
 			let user = keystore.sr25519_public_keys(crate::KEY_TYPE)[2];
 			let request_id = 1;
+
+			assert_ok!(pallet_balances::Pallet::<Test>::force_set_balance(
+				RuntimeOrigin::root(),
+                provider.clone(),
+                100000 * 10u128.pow(12),
+            ));
 
 			assert_ok!(TemplateModule::enroll_as_provider(RuntimeOrigin::signed(provider)));
 

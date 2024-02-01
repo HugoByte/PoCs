@@ -22,11 +22,15 @@ use frame_support::{
 	assert_ok, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
-
+use pallet_balances;
 use sp_std::sync::Arc;
+pub const EXISTENTIAL_DEPOSIT: u128 = 500;
+pub type Balance = u128;
+use frame_support::traits::ConstU128;
 
 use parking_lot::{RawRwLock, RwLock};
 
+use pallet_balances::GenesisConfig as BalancesGenesisConfig;
 use sp_core::{
 	offchain::{
 		testing::{self, OffchainState, PoolState, TestOffchainExt, TestPersistentOffchainDB},
@@ -52,6 +56,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TemplateModule: pallet_template::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -73,7 +78,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -114,6 +119,7 @@ where
 
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const ExistentialDeposit: u128 = 1;
 }
 
 impl pallet_template::Config for Test {
@@ -121,6 +127,23 @@ impl pallet_template::Config for Test {
 	type WeightInfo = ();
 	type AuthorityId = crypto::AuthId;
 	type MaxEnclaveCount = ConstU32<{ u32::MAX }>;
+}
+
+impl pallet_balances::Config for Test {
+	type MaxLocks = ConstU32<50>;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type Balance = Balance;
+	type RuntimeEvent = RuntimeEvent;
+	type DustRemoval = ();
+	type ExistentialDeposit = ConstU128<EXISTENTIAL_DEPOSIT>;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type RuntimeFreezeReason = ();
+	type MaxHolds = ();
 }
 
 pub fn test_pub() -> sp_core::sr25519::Public {
@@ -143,7 +166,7 @@ where
 
 	ext.register_extension(OffchainDbExt::new(offchain.clone()));
 	ext.register_extension(OffchainWorkerExt::new(offchain));
-	
+
 	let keystore = Arc::new(MemoryKeystore::new());
 	ext.register_extension(KeystoreExt::from(keystore.clone()));
 
