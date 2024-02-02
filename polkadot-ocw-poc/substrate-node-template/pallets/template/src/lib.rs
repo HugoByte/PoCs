@@ -263,6 +263,12 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			if let EnclaveAction::CreateEnclave { .. } = params.action {
+			}
+			else if let EnclaveAction::SetupEnclave { .. } = params.action {
+				ensure!(handler.is_some(), Error::<T>::HandlerRequired);
+				
+				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap()).ok_or(Error::<T>::EnclaveNotFound)?;
+                ensure!(enclave_info.provider == who, Error::<T>::NotAuthorizedUser);
 			} else {
 				ensure!(handler.is_some(), Error::<T>::HandlerRequired);
 				
