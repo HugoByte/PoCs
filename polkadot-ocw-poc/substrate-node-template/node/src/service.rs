@@ -173,36 +173,33 @@ pub fn new_full(
 	if config.offchain_worker.enabled {
 		let mut kurtosis_clients = Vec::new();
 
+		if is_dev {
+			if let Ok(key) = keystore_container
+				.keystore()
+				.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
+			{
+				let _ = keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
+			};
+		}
+
 		if provider {
-			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(
-				engine_host,
-				task_manager.spawn_handle(),
-			);
-			client.initialize();
+			let client = pallet_template::kurtosis::KurtosisClient::new_with_engine(engine_host);
+			client.initialize(task_manager.spawn_handle());
 
 			kurtosis_clients
-				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
-
-			if is_dev {
-				if let Ok(key) = keystore_container
-					.keystore()
-					.sr25519_generate_new(pallet_template::KEY_TYPE, Some("//Alice"))
-				{
-					let _ =
-						keystore_container.keystore().insert(pallet_template::KEY_TYPE, "", &key);
-				};
-			}
+				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client, task_manager.spawn_handle())));
 		}
 
 		if conduit {
 			let client = pallet_template::kurtosis::KurtosisClient::new_with_api_container(
 				api_container_host,
-				task_manager.spawn_handle(),
 			);
-			client.initialize();
+			client.initialize(task_manager.spawn_handle());
 
-			kurtosis_clients
-				.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(client)));
+			kurtosis_clients.push(Arc::new(pallet_template::kurtosis::KurtosisContainer::new(
+				client,
+				task_manager.spawn_handle(),
+			)));
 
 			let keystore = keystore_container.keystore().clone();
 			let provider_url = provider_url.expect("provider url not provided");
@@ -244,7 +241,7 @@ pub fn new_full(
 										key,
 										request_id
 									);
-									
+
 									Ok(())
 								});
 							},

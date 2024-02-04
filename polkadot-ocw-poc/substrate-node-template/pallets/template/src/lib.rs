@@ -8,13 +8,14 @@ use frame_system::{
 	pallet_prelude::BlockNumberFor,
 };
 use pallet_balances::Pallet as Balances;
+use scale_info::prelude::string::String;
 use sp_core::crypto::{AccountId32, KeyTypeId};
 pub use sp_core::ConstU32;
 use sp_runtime::{offchain::storage::StorageValueRef, traits::StaticLookup, SaturatedConversion};
 use sp_std::{collections::btree_map::BTreeMap, prelude::ToOwned, vec, vec::Vec};
-use scale_info::prelude::string::String;
 
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
+
 pub const PENDING_AUTHORIZED_CONDUIT_NODES_STORAGE: &[u8] =
 	b"pallet_template::pending_authorized_conduit_nodes";
 pub const PUBLIC_ENDPOINT_STORAGE: &[u8] = b"pallet_template::public_endpoint";
@@ -263,17 +264,18 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			if let EnclaveAction::CreateEnclave { .. } = params.action {
-			}
-			else if let EnclaveAction::SetupEnclave { .. } = params.action {
+			} else if let EnclaveAction::SetupEnclave { .. } = params.action {
 				ensure!(handler.is_some(), Error::<T>::HandlerRequired);
-				
-				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap()).ok_or(Error::<T>::EnclaveNotFound)?;
-                ensure!(enclave_info.provider == who, Error::<T>::NotAuthorizedUser);
+
+				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap())
+					.ok_or(Error::<T>::EnclaveNotFound)?;
+				ensure!(enclave_info.provider == who, Error::<T>::NotAuthorizedUser);
 			} else {
 				ensure!(handler.is_some(), Error::<T>::HandlerRequired);
-				
-				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap()).ok_or(Error::<T>::EnclaveNotFound)?;
-                ensure!(enclave_info.user == who, Error::<T>::NotAuthorizedUser);
+
+				let enclave_info = Enclaves::<T>::get(&handler.as_ref().unwrap())
+					.ok_or(Error::<T>::EnclaveNotFound)?;
+				ensure!(enclave_info.user == who, Error::<T>::NotAuthorizedUser);
 			};
 
 			let request_id = Self::next_request_id();
@@ -298,10 +300,16 @@ pub mod pallet {
 				let request = r.as_mut().ok_or(Error::<T>::RequestNotFound)?;
 
 				if let EnclaveAction::CreateEnclave { .. } = request.params.action {
-					ensure!(request.handler.is_none() || *request.handler.as_ref().unwrap() == who, Error::<T>::NotAuthorizedHandler);
+					ensure!(
+						request.handler.is_none() || *request.handler.as_ref().unwrap() == who,
+						Error::<T>::NotAuthorizedHandler
+					);
 					ensure!(Providers::<T>::contains_key(&who), Error::<T>::NotAProvider);
 				} else {
-					ensure!(*request.handler.as_ref().unwrap() == who, Error::<T>::NotAuthorizedHandler);
+					ensure!(
+						*request.handler.as_ref().unwrap() == who,
+						Error::<T>::NotAuthorizedHandler
+					);
 				}
 
 				let acknowledged_request = AcknowledgedRequest {
@@ -377,11 +385,13 @@ pub mod pallet {
 							Self::deposit_event(Event::EnclaveExecutionOutput {
 								handle: who.clone(),
 								request_id,
-								output: String::from_utf8(result.clone().into_inner()).map_err(|e| {
-									sp_runtime::DispatchError::Other(
-										"failed to deserialize to string",
-									)
-								})?,
+								output: String::from_utf8(result.clone().into_inner()).map_err(
+									|e| {
+										sp_runtime::DispatchError::Other(
+											"failed to deserialize to string",
+										)
+									},
+								)?,
 							});
 							Ok(())
 						},
@@ -471,19 +481,40 @@ pub mod pallet {
 								});
 						};
 					},
-					EnclaveAction::ExecuteInEnclave {} => {
-						if let Ok(ref result) =
-							kurtosis::kurtosis::execute_in_enclave(request.params.script)
-						{
-							let tx_results =
-								signer.send_signed_transaction(|_| Call::process_enclave_request {
-									request_id: id,
-									outcome: Outcome::ExecutionInEnclaveCompleted {
-										result: result.clone(),
-									},
+					EnclaveAction::ExecuteInEnclave {} =>
+						match kurtosis::kurtosis::execute_in_enclave(request.params.script) {
+							Ok(ref result) => {
+								let tx_results = signer.send_signed_transaction(|_| {
+									Call::process_enclave_request {
+										request_id: id,
+										outcome: Outcome::ExecutionInEnclaveCompleted {
+											result: result.clone(),
+										},
+									}
 								});
-						};
-					},
+
+								for tx_result in tx_results {
+									match tx_result {
+										(account, Ok(())) => {
+											log::info!(
+												"Transaction for account {:?} was successful",
+												account.id
+											);
+										},
+										(account, Err(e)) => {
+											log::error!(
+												"Transaction for account {:?} failed with {:?}",
+												account.id,
+												e
+											);
+										},
+									}
+								}
+							},
+							Err(()) => {
+								log::error!("Error occured");
+							},
+						},
 					_ => {},
 				}
 			});

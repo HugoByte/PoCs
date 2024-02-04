@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use futures::{
-	lock::{MappedMutexGuard, Mutex, MutexGuard},
+	lock::{Mutex},
 	Future, FutureExt, TryFutureExt,
 };
+
+#[cfg(feature = "std")]
+use parking_lot::ReentrantMutex;
 
 #[cfg(feature = "std")]
 use kurtosis_sdk::{
@@ -28,10 +31,14 @@ use sp_core::traits::SpawnNamed;
 
 #[cfg(feature = "std")]
 use sp_externalities::ExternalitiesExt;
-
 use sp_runtime::WeakBoundedVec;
+use sp_std::collections::btree_map::BTreeMap;
+
 #[cfg(feature = "std")]
 use tokio::sync::Notify;
+
+#[cfg(feature = "std")]
+use std::sync::mpsc;
 
 #[cfg(feature = "std")]
 use tokio::time::{sleep, Duration};
@@ -76,25 +83,28 @@ pub enum KurtosisClientState<T> {
 #[cfg(feature = "std")]
 pub struct KurtosisClient<T> {
 	client: Arc<Mutex<KurtosisClientState<T>>>,
-	spawner: Box<dyn SpawnNamed>,
 	state_changed: Arc<Notify>,
 }
 
 #[cfg(feature = "std")]
-pub struct KurtosisContainer(Arc<dyn KurtosisClientTrait + Send + Sync>);
+pub struct KurtosisContainer {
+	client: Arc<dyn KurtosisClientTrait + Send + Sync>,
+	spawner: Box<dyn SpawnNamed>,
+}
 
 #[cfg(feature = "std")]
 impl KurtosisContainer {
 	pub fn new(
 		client: Arc<impl KurtosisClientTrait + std::marker::Sync + std::marker::Send + 'static>,
+		spawner: impl SpawnNamed + 'static,
 	) -> Self {
-		Self(client)
+		Self { client, spawner: Box::new(spawner) }
 	}
 
 	pub fn engine_service(
 		&self,
 	) -> Option<&KurtosisClient<EngineServiceClient<tonic::transport::Channel>>> {
-		self.0
+		self.client
 			.as_any()
 			.downcast_ref::<KurtosisClient<EngineServiceClient<tonic::transport::Channel>>>()
 	}
@@ -102,7 +112,7 @@ impl KurtosisContainer {
 	pub fn api_container_service(
 		&self,
 	) -> Option<&KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>>> {
-		self.0
+		self.client
 			.as_any()
 			.downcast_ref::<KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>>>()
 	}
@@ -110,14 +120,13 @@ impl KurtosisContainer {
 
 #[cfg(feature = "std")]
 impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_engine(host: Option<String>, spawner: impl SpawnNamed + 'static) -> Arc<Self> {
+	pub fn new_with_engine(host: Option<String>) -> Arc<Self> {
 		let future = async move {
 			EngineServiceClient::connect(host.unwrap_or("https://[::1]:9710".to_string())).await
 		};
 
 		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
-			spawner: Box::new(spawner),
 			state_changed: Arc::new(Notify::new()),
 		})
 	}
@@ -132,10 +141,7 @@ impl KurtosisClientTrait for KurtosisClient<EngineServiceClient<tonic::transport
 
 #[cfg(feature = "std")]
 impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
-	pub fn new_with_api_container(
-		host: Option<String>,
-		spawner: impl SpawnNamed + 'static,
-	) -> Arc<Self> {
+	pub fn new_with_api_container(host: Option<String>) -> Arc<Self> {
 		let future = async move {
 			ApiContainerServiceClient::connect(host.unwrap_or("https://[::1]:7443".to_string()))
 				.await
@@ -143,7 +149,6 @@ impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 
 		Arc::new(Self {
 			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
-			spawner: Box::new(spawner),
 			state_changed: Arc::new(Notify::new()),
 		})
 	}
@@ -161,11 +166,11 @@ impl<T> KurtosisClient<T>
 where
 	T: Send + 'static,
 {
-	pub fn initialize(&self) {
+	pub fn initialize(&self, spawner: impl SpawnNamed + 'static) {
 		let client_clone = self.client.clone();
 		let state_changed = self.state_changed.clone();
 
-		self.spawner.spawn(
+		spawner.spawn(
 			"kurtosis-client-init",
 			None,
 			Box::pin(async move {
@@ -239,6 +244,7 @@ impl ApiContainerClientTrait
 	{
 		self.state_changed.notified().await;
 		let client_state = self.client.lock().await;
+
 		loop {
 			match &*client_state {
 				KurtosisClientState::Uninitialized =>
@@ -274,30 +280,28 @@ pub trait Kurtosis {
 		if let Some(kurtosis_ext) = self.extension::<KurtosisExt>() {
 			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
-			let (response, spawner) = rt.block_on(async {
+			let response = rt.block_on(async {
 				let engine_service =
 					kurtosis_ext.0.engine_service().expect("Failed to get engine service");
-				(
-					engine_service
-						.with_client(|mut client| async move {
-							client
-								.create_enclave(CreateEnclaveArgs {
-									enclave_name: None,
-									api_container_log_level: Some("info".to_string()),
-									api_container_version_tag: None,
-									mode: Some(0),
-								})
-								.await
-								.unwrap()
-								.into_inner()
-						})
-						.await
-						.unwrap()
-						.await,
-					engine_service.spawner.clone(),
-				)
+				(engine_service
+					.with_client(|mut client| async move {
+						client
+							.create_enclave(CreateEnclaveArgs {
+								enclave_name: None,
+								api_container_log_level: Some("info".to_string()),
+								api_container_version_tag: None,
+								mode: Some(0),
+							})
+							.await
+							.unwrap()
+							.into_inner()
+					})
+					.await
+					.unwrap()
+					.await)
 			});
 
+			let spawner = kurtosis_ext.0.spawner.clone();
 			rt.block_on(async {
 				let enclave = response
 					.enclave_info
@@ -307,16 +311,13 @@ pub trait Kurtosis {
 
 				let api_container_service = KurtosisClient::<
 					ApiContainerServiceClient<tonic::transport::Channel>,
-				>::new_with_api_container(
-					Some(format!(
-						"https://{}:{}",
-						enclave.ip_inside_enclave.clone(),
-						enclave.grpc_port_inside_enclave.clone()
-					)),
-					spawner,
-				);
+				>::new_with_api_container(Some(format!(
+					"https://{}:{}",
+					enclave.ip_inside_enclave.clone(),
+					enclave.grpc_port_inside_enclave.clone()
+				)));
 
-				api_container_service.initialize();
+				api_container_service.initialize(spawner);
 
 				let offchain_db_ext = self.extension::<OffchainDbExt>().unwrap();
 				let endpoint: String = offchain_db_ext
@@ -439,16 +440,18 @@ pub trait Kurtosis {
 		&mut self,
 		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
 	) -> Result<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>, ()> {
-		let mut results = Vec::new();
+		let (tx, rx) = mpsc::channel();
 
-		#[cfg(not(test))]
-		{
-			let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-			let api_container_service =
-				self.extension::<KurtosisExt>().unwrap().api_container_service().unwrap();
-
-			rt.block_on(async {
-				let mut result = api_container_service
+		let kurtosis_ext = self.extension::<KurtosisExt>().unwrap().clone();
+		let spawner = kurtosis_ext.spawner.clone();
+		
+		spawner.spawn(
+			"kurtosis-client-execute-in-enclave",
+			None,
+			Box::pin(async move {
+				let mut result = kurtosis_ext
+					.api_container_service()
+					.unwrap()
 					.with_client(|mut client| async move {
 						client
 							.run_starlark_script(RunStarlarkScriptArgs {
@@ -476,6 +479,7 @@ pub trait Kurtosis {
 					.unwrap()
 					.await;
 
+				let mut results = Vec::new();
 				while let Some(next_message) = result.message().await.unwrap() {
 					if let Some(line) = next_message.run_response_line {
 						match line {
@@ -488,8 +492,12 @@ pub trait Kurtosis {
 						}
 					}
 				}
-			});
-		}
+
+				let _ = tx.send(results);
+			}),
+		);
+
+		let results = rx.recv().map_err(|_| ())?;
 
 		WeakBoundedVec::<u8, ConstU32<{ u32::MAX }>>::try_from(results).map_err(|_| ())
 	}
