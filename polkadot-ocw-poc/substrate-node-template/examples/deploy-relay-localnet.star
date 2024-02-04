@@ -2,7 +2,7 @@ package = import_module("github.com/hugobyte/polkadot-kurtosis-package/main.star
 
 def run(plan):
     relaychain = {
-        "name": "rococo",
+        "name": "rococo-local",
         "nodes": [
             {
                 "name": "alice",

@@ -4,10 +4,10 @@ use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
-use futures::{
-	lock::{Mutex},
-	Future, FutureExt, TryFutureExt,
-};
+use futures::{Future, FutureExt, TryFutureExt};
+
+#[cfg(feature = "std")]
+use tokio::sync::Mutex;
 
 #[cfg(feature = "std")]
 use parking_lot::ReentrantMutex;
@@ -41,7 +41,7 @@ use tokio::sync::Notify;
 use std::sync::mpsc;
 
 #[cfg(feature = "std")]
-use tokio::time::{sleep, Duration};
+use tokio::time::{timeout, sleep, Duration};
 
 use core::{future::IntoFuture, pin::Pin};
 use sp_core::ConstU32;
@@ -83,7 +83,6 @@ pub enum KurtosisClientState<T> {
 #[cfg(feature = "std")]
 pub struct KurtosisClient<T> {
 	client: Arc<Mutex<KurtosisClientState<T>>>,
-	state_changed: Arc<Notify>,
 }
 
 #[cfg(feature = "std")]
@@ -126,8 +125,7 @@ impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
 		};
 
 		Arc::new(Self {
-			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
-			state_changed: Arc::new(Notify::new()),
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future))))
 		})
 	}
 }
@@ -148,8 +146,7 @@ impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 		};
 
 		Arc::new(Self {
-			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
-			state_changed: Arc::new(Notify::new()),
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future))))
 		})
 	}
 }
@@ -164,18 +161,17 @@ impl KurtosisClientTrait for KurtosisClient<ApiContainerServiceClient<tonic::tra
 #[cfg(feature = "std")]
 impl<T> KurtosisClient<T>
 where
-	T: Send + 'static,
+	T: Send + Sync + 'static,
 {
 	pub fn initialize(&self, spawner: impl SpawnNamed + 'static) {
-		let client_clone = self.client.clone();
-		let state_changed = self.state_changed.clone();
+		let client = self.client.clone();
 
 		spawner.spawn(
 			"kurtosis-client-init",
 			None,
 			Box::pin(async move {
 				log::info!("Kurtosis client is initializing.");
-				let mut client_lock = client_clone.lock().await;
+				let mut client_lock = client.lock().await;
 				match &mut *client_lock {
 					KurtosisClientState::Pending(ref mut future) => match future.as_mut().await {
 						Ok(client) => {
@@ -189,8 +185,6 @@ where
 					},
 					_ => log::warn!("Kurtosis client is not in a pending state."),
 				}
-
-				state_changed.notify_one();
 			}),
 		);
 	}
@@ -210,19 +204,24 @@ impl EngineClientTrait for KurtosisClient<EngineServiceClient<tonic::transport::
 	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
 	where
 		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
-	{
-		let client_state = self.client.lock().await;
-		loop {
-			match &*client_state {
-				KurtosisClientState::Uninitialized =>
-					break Err("Client has not been initialized".to_string()),
-				KurtosisClientState::Ready(client) => break Ok(f(client.clone())),
-				KurtosisClientState::Pending(_) => self.state_changed.notified().await,
-				KurtosisClientState::Failed(reason) =>
-					break Err(format!("Client initialization failed: {:?}", reason)),
-			}
+		{
+			let client = timeout(Duration::from_secs(30), async {
+	
+				loop {
+					let client_state = self.client.lock().await;
+					match &*client_state {
+						KurtosisClientState::Ready(client) => break client.clone(),
+						KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
+							sleep(Duration::from_millis(1000)).await;
+							continue;
+						},
+						_ => {}
+					}
+				}
+			}).await.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
+	
+			Ok(f(client))
 		}
-	}
 }
 
 #[cfg(feature = "std")]
@@ -242,20 +241,23 @@ impl ApiContainerClientTrait
 	where
 		F: FnOnce(ApiContainerServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
 	{
-		self.state_changed.notified().await;
-		let client_state = self.client.lock().await;
+        let client = timeout(Duration::from_secs(30), async {
 
-		loop {
-			match &*client_state {
-				KurtosisClientState::Uninitialized =>
-					break Err("Client has not been initialized".to_string()),
-				KurtosisClientState::Ready(client) => break Ok(f(client.clone())),
-				KurtosisClientState::Pending(_) => self.state_changed.notified().await,
-				KurtosisClientState::Failed(reason) =>
-					break Err(format!("Client initialization failed: {:?}", reason)),
-			}
-		}
-	}
+            loop {
+                let client_state = self.client.lock().await;
+                match &*client_state {
+                    KurtosisClientState::Ready(client) => break client.clone(),
+                    KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
+                        sleep(Duration::from_millis(1000)).await;
+                        continue;
+                    },
+                    _ => {}
+                }
+            }
+        }).await.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
+
+        Ok(f(client))
+    }
 }
 
 #[cfg(feature = "std")]
@@ -444,7 +446,8 @@ pub trait Kurtosis {
 
 		let kurtosis_ext = self.extension::<KurtosisExt>().unwrap().clone();
 		let spawner = kurtosis_ext.spawner.clone();
-		
+
+		#[cfg(not(test))]
 		spawner.spawn(
 			"kurtosis-client-execute-in-enclave",
 			None,
@@ -466,7 +469,7 @@ pub trait Kurtosis {
 								serialized_params: Some("{}".to_string()),
 								dry_run: None,
 								main_function_name: Some("run".to_string()),
-								experimental_features: vec![],
+								experimental_features: vec![0],
 								cloud_instance_id: None,
 								cloud_user_id: None,
 								image_download_mode: None,
