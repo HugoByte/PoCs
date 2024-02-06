@@ -17,7 +17,8 @@ use kurtosis_sdk::{
 	enclave_api::{
 		api_container_service_client::ApiContainerServiceClient,
 		run_starlark_package_args::StarlarkPackageContent,
-		starlark_run_response_line::RunResponseLine::InstructionResult, RunStarlarkPackageArgs,
+		starlark_run_response_line::RunResponseLine::InstructionResult,
+		starlark_run_response_line::RunResponseLine::RunFinishedEvent, RunStarlarkPackageArgs,
 		RunStarlarkScriptArgs,
 	},
 	engine_api::{engine_service_client::EngineServiceClient, CreateEnclaveArgs},
@@ -41,7 +42,7 @@ use tokio::sync::Notify;
 use std::sync::mpsc;
 
 #[cfg(feature = "std")]
-use tokio::time::{timeout, sleep, Duration};
+use tokio::time::{sleep, timeout, Duration};
 
 use core::{future::IntoFuture, pin::Pin};
 use sp_core::ConstU32;
@@ -125,7 +126,7 @@ impl KurtosisClient<EngineServiceClient<tonic::transport::Channel>> {
 		};
 
 		Arc::new(Self {
-			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future))))
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
 		})
 	}
 }
@@ -146,7 +147,7 @@ impl KurtosisClient<ApiContainerServiceClient<tonic::transport::Channel>> {
 		};
 
 		Arc::new(Self {
-			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future))))
+			client: Arc::new(Mutex::new(KurtosisClientState::Pending(Box::pin(future)))),
 		})
 	}
 }
@@ -204,24 +205,25 @@ impl EngineClientTrait for KurtosisClient<EngineServiceClient<tonic::transport::
 	async fn with_client<F, U>(&self, f: F) -> Result<U, String>
 	where
 		F: FnOnce(EngineServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
-		{
-			let client = timeout(Duration::from_secs(30), async {
-	
-				loop {
-					let client_state = self.client.lock().await;
-					match &*client_state {
-						KurtosisClientState::Ready(client) => break client.clone(),
-						KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
-							sleep(Duration::from_millis(1000)).await;
-							continue;
-						},
-						_ => {}
-					}
+	{
+		let client = timeout(Duration::from_secs(30), async {
+			loop {
+				let client_state = self.client.lock().await;
+				match &*client_state {
+					KurtosisClientState::Ready(client) => break client.clone(),
+					KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
+						sleep(Duration::from_millis(1000)).await;
+						continue;
+					},
+					_ => {},
 				}
-			}).await.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
-	
-			Ok(f(client))
-		}
+			}
+		})
+		.await
+		.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
+
+		Ok(f(client))
+	}
 }
 
 #[cfg(feature = "std")]
@@ -241,23 +243,24 @@ impl ApiContainerClientTrait
 	where
 		F: FnOnce(ApiContainerServiceClient<tonic::transport::Channel>) -> U + std::marker::Send,
 	{
-        let client = timeout(Duration::from_secs(30), async {
+		let client = timeout(Duration::from_secs(30), async {
+			loop {
+				let client_state = self.client.lock().await;
+				match &*client_state {
+					KurtosisClientState::Ready(client) => break client.clone(),
+					KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
+						sleep(Duration::from_millis(1000)).await;
+						continue;
+					},
+					_ => {},
+				}
+			}
+		})
+		.await
+		.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
 
-            loop {
-                let client_state = self.client.lock().await;
-                match &*client_state {
-                    KurtosisClientState::Ready(client) => break client.clone(),
-                    KurtosisClientState::Uninitialized | KurtosisClientState::Failed(_) => {
-                        sleep(Duration::from_millis(1000)).await;
-                        continue;
-                    },
-                    _ => {}
-                }
-            }
-        }).await.map_err(|_| "Timeout waiting for client to be ready".to_string())?;
-
-        Ok(f(client))
-    }
+		Ok(f(client))
+	}
 }
 
 #[cfg(feature = "std")]
@@ -486,9 +489,9 @@ pub trait Kurtosis {
 				while let Some(next_message) = result.message().await.unwrap() {
 					if let Some(line) = next_message.run_response_line {
 						match line {
-							InstructionResult(result) => {
+							RunFinishedEvent(result) => {
 								results.extend_from_slice(
-									result.serialized_instruction_result.as_bytes(),
+									result.serialized_output.unwrap_or_default().as_bytes(),
 								);
 							},
 							_ => (),
