@@ -361,6 +361,14 @@ pub mod pallet {
 									(100 * 10u128.pow(12)).saturated_into(),
 								)?;
 
+								ProviderEnclaves::<T>::mutate(&who, |enclave_handles| {
+									if let Some(handles) = enclave_handles {
+										handles.try_push(handle.clone()).expect("Failed to append enclave handle; max limit reached");
+									} else {
+										*enclave_handles = Some(WeakBoundedVec::try_from(vec![handle.clone()]).expect("Failed to create WeakBoundedVec"));
+									}
+								});
+
 								Self::create_enclave_request(
 									OriginFor::<T>::from(Some(who.clone()).into()),
 									Some(handle.to_owned()),
@@ -616,6 +624,15 @@ pub mod pallet {
 					)
 				};
 			};
+		}
+
+		pub fn get_providers() -> Vec<T::AccountId> {
+			Providers::<T>::iter().map(|(acc, _)| acc).collect()
+		}
+	
+		pub fn get_provider_enclaves(provider: T::AccountId) -> Vec<T::AccountId> {
+			ProviderEnclaves::<T>::get(provider)
+				.map_or(vec![], |enclaves| enclaves.into_inner())
 		}
 	}
 }

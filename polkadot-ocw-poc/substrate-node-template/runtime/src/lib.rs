@@ -22,8 +22,8 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 use codec::Encode;
-use sp_runtime::{generic::Era, SaturatedConversion};
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
+use sp_runtime::{generic::Era, SaturatedConversion};
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
 	construct_runtime, derive_impl, parameter_types,
@@ -257,7 +257,7 @@ impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
 	type AuthorityId = pallet_template::crypto::AuthId;
-	type MaxEnclaveCount = ConstU32<{u32::MAX}>;
+	type MaxEnclaveCount = ConstU32<{ u32::MAX }>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -570,6 +570,16 @@ impl_runtime_apis! {
 			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
+
+	impl pallet_template_rpc_runtime_api::TemplateRuntimeApi<Block, AccountId> for Runtime {
+		fn get_providers() -> Vec<AccountId> {
+			TemplateModule::get_providers()
+		}
+
+		fn get_provider_enclaves(provider: AccountId) -> Vec<AccountId> {
+			TemplateModule::get_provider_enclaves(provider)
+		}
+	}
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
@@ -619,8 +629,8 @@ impl frame_system::offchain::SigningTypes for Runtime {
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
 where
-    RuntimeCall: From<C>,
+	RuntimeCall: From<C>,
 {
-    type Extrinsic = UncheckedExtrinsic;
-    type OverarchingCall = RuntimeCall;
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = RuntimeCall;
 }

@@ -1,0 +1,18 @@
+[package]
+name = "pallet-template-primitives"
+version = "0.0.1"
+description = "A package that adds Runtime Api for the Template pallet"
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+edition.workspace = true
+license = "MIT-0"
+publish = false
+homepage = "https://substrate.io"
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+
+[dependencies]
+
+
+[features]
+default = ["std"]
+std = [
+]

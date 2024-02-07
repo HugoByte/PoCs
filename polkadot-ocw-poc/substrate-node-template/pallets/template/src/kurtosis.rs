@@ -445,7 +445,7 @@ pub trait Kurtosis {
 		&mut self,
 		setup_script: Option<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>>,
 	) -> Result<WeakBoundedVec<u8, ConstU32<{ u32::MAX }>>, ()> {
-		let (tx, rx) = mpsc::channel();
+		let (tx, rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) = mpsc::channel();
 
 		let kurtosis_ext = self.extension::<KurtosisExt>().unwrap().clone();
 		let spawner = kurtosis_ext.spawner.clone();

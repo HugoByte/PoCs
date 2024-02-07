@@ -4,6 +4,7 @@ members = [
     "node",
     "pallets/template",
     "pallets/template/rpc",
+    "pallets/template/rpc/runtime-api",
     "runtime",
 ]
 

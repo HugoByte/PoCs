@@ -5256,6 +5256,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-sudo",
  "pallet-template",
+ "pallet-template-rpc-runtime-api",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -5613,6 +5614,7 @@ version = "1.0.0"
 dependencies = [
  "jsonrpsee",
  "pallet-template",
+ "pallet-template-rpc-runtime-api",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sc-network",
@@ -5624,6 +5626,16 @@ dependencies = [
  "sp-keystore",
  "sp-offchain",
  "sp-runtime",
+]
+
+[[package]]
+name = "pallet-template-rpc-runtime-api"
+version = "0.0.1"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-core",
+ "sp-std 8.0.0 (git+https://github.com/paritytech/polkadot-sdk.git?tag=polkadot-v1.5.0)",
 ]
 
 [[package]]

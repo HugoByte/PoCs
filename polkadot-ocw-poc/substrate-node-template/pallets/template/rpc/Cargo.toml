@@ -23,3 +23,4 @@ sp-offchain = { default-features = false, git = "https://github.com/paritytech/p
 sc-network = { version = "0.10.0-dev", git = "https://github.com/paritytech/polkadot-sdk.git", tag = "polkadot-v1.5.0", default-features = false }
 
 pallet-template = { version = "4.0.0-dev", default-features = false, path = "../" }
+pallet-template-rpc-runtime-api = { path = "./runtime-api", default-features = false }

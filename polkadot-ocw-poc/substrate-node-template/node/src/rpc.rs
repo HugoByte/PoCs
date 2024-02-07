@@ -9,11 +9,11 @@ use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
 use node_template_runtime::{opaque::Block, AccountId, Balance, Nonce};
+pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-pub use sc_rpc_api::DenyUnsafe;
 use sp_core::offchain::OffchainStorage;
 
 /// Full client dependencies.
@@ -38,6 +38,7 @@ where
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Nonce>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BlockBuilder<Block>,
+	C::Api: pallet_template_rpc::TemplateRuntimeApi<Block, AccountId>,
 	P: TransactionPool + 'static,
 	S: OffchainStorage + 'static,
 {
@@ -50,7 +51,15 @@ where
 
 	module.merge(System::new(client.clone(), pool.clone(), deny_unsafe.clone()).into_rpc())?;
 	module.merge(TransactionPayment::new(client.clone()).into_rpc())?;
-	module.merge(<TemplateImpl<S> as TemplateApiServer<AccountId>>::into_rpc(TemplateImpl::new(offchain_storage, deny_unsafe)))?;
+	module.merge(<TemplateImpl<
+		S,
+		C,
+		Block,
+	> as TemplateApiServer<AccountId>>::into_rpc(TemplateImpl::new(
+		client.clone(),
+		offchain_storage,
+		deny_unsafe,
+	)))?;
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed

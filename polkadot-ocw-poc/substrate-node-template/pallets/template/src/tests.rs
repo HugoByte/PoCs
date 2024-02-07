@@ -5,9 +5,10 @@ use frame_support::{assert_noop, assert_ok, pallet_prelude::DispatchError, trait
 use sp_core::{offchain::OffchainStorage, ByteArray, Decode, Encode};
 use sp_externalities::Externalities;
 use sp_keystore::Keystore;
-use sp_runtime::{offchain::storage::StorageValueRef, testing::TestXt};
+use sp_runtime::{offchain::storage::StorageValueRef, testing::TestXt, WeakBoundedVec};
 use sp_std::collections::btree_map::BTreeMap;
 use frame_support::traits::fungible::Mutate;
+pub use sp_core::ConstU32;
 
 fn events() -> Vec<Event<Test>> {
 	let result =
@@ -279,6 +280,8 @@ fn test_create_enclave_and_setup_enclave_works() {
 				crate::Enclaves::<Test>::get(&conduit_node),
 				Some(crate::EnclaveInfo::new(provider, user, crate::EnclaveStatus::Pending)),
 			);
+
+			assert_eq!(crate::ProviderEnclaves::<Test>::get(&provider), Some(WeakBoundedVec::<sp_core::sr25519::Public, ConstU32<{ u32::MAX }>>::try_from(vec![conduit_node.clone()]).unwrap()));
 
 			assert_eq!(
 				events(),
