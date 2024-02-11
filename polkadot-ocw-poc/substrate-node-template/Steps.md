@@ -32,7 +32,7 @@ kubectl describe svc kurtosis-engine-[uuid of engine] -n kurtosis-engine-[uuid o
 6. Deploy Provider
 
 ```
-kurtosis run github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template '{ "node_type": "provider", "node_args": { "seed":"[seed phrase]", "engine_host": "[cluster ip of engine]"}, "bootnodes": "/ip4/[cluster ip of node 1]/tcp/30333/p2p/[peer id of node 1]" }'
+kurtosis run github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template '{ "node_type": "provider", "node_args": { "seed":"[seed phrase]", "engine_host": "https://[cluster ip of engine]:9710"}, "bootnodes": "/ip4/[cluster ip of node 1]/tcp/30333/p2p/[peer id of node 1]" }'
 ```
 
 7. Get Cluster Ip of Provider
@@ -40,12 +40,14 @@ kurtosis run github.com/hugobyte/pocs/polkadot-ocw-poc/substrate-node-template '
 kubectl describe svc polkadot-ocw-poc -n kt-[Enclave of provider]
 ```
 8. Set Providers Endpoint using RPC
+```
 {
   "jsonrpc": "2.0",
   "method": "template_setPublicEndpoint",
   "params": ["http://[cluster ip of provider]:9944"],
   "id": 1
 }
+```
 9. Add bootnodes using RPC
 ```
 {
