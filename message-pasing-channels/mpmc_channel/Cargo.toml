@@ -1,0 +1,12 @@
+[package]
+name = "mpmc_channel"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossbeam = "0.8.4"
+slog-term = "2.9.0"
+slog-async = "2.8.0"
+slog = { version = "2.7.0" }
