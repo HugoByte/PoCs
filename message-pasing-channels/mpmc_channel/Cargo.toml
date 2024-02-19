@@ -10,3 +10,4 @@ crossbeam = "0.8.4"
 slog-term = "2.9.0"
 slog-async = "2.8.0"
 slog = { version = "2.7.0" }
+num = "0.4.1"
