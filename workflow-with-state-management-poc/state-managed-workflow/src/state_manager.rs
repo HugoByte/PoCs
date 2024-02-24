@@ -3,17 +3,23 @@ use crate::WorkflowGraph;
 
 #[derive(Default, Debug)]
 pub struct StateData{
-    // execution_state: ExecutionState, // to represent the task life cycle 
+    // execution_state: ExecutionState, // to represent the task life cycle
     action_name: String, // task name
     task_index: usize, // n'th task out of m tasks
-    error: Option<String> // to define the error kind 
+    error: Option<String> // to define the error kind
 }
 
 impl StateData{
 
     fn update_state_data(&self){
 
-       let state_data:serde_json::Value  =  serde_json::from_str(&format!("{{\"action_name\":\"{}\",\"task_index\":{}, \"error\":\"{:?}\"}}", self.action_name, self.task_index, self.error)).unwrap();
+        let state_data:serde_json::Value = serde_json::json!(
+            {
+                "action_name": self.action_name,
+                "task_index": self.task_index,
+                "error":   self.error
+            }
+        );
 
         let serialized = serde_json::to_vec(&state_data).unwrap();
         let size = serialized.len() as i32;
