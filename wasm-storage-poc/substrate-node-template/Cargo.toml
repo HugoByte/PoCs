@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "node",
+    "pallets/template",
+    "runtime",
+]
+
+[workspace.package]
+edition = "2021"
+
+[workspace.dependencies]
+
+[profile.release]
+panic = "unwind"
+
+[profile.production]
+inherits = "release"
+lto = true
+codegen-units = 1
