@@ -8,9 +8,9 @@
 
 mod common;
 mod macros;
+mod state_manager;
 mod traits;
 mod types;
-mod state_manager;
 
 use state_manager::*;
 
@@ -60,4 +60,3 @@ pub fn _start(ptr: *mut u8, length: i32) {
         set_output(ptr as i32, size);
     }
 }
-

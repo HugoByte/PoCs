@@ -1,10 +1,12 @@
 #![allow(unused_imports)]
 use super::*;
+use alloc::task;
 use paste::paste;
 #[derive(Debug)]
 pub struct WorkflowGraph {
     edges: Vec<(usize, usize)>,
     nodes: Vec<Box<dyn Execute>>,
+    pub state_manger: StateManager,
 }
 
 impl WorkflowGraph {
@@ -12,6 +14,7 @@ impl WorkflowGraph {
         WorkflowGraph {
             nodes: Vec::with_capacity(size),
             edges: Vec::new(),
+            state_manger: StateManager::init(),
         }
     }
 }
@@ -49,74 +52,140 @@ impl WorkflowGraph {
         (0..self.node_count()).collect::<Vec<_>>()
     }
 
-    pub fn init(&mut self) -> Result<&mut Self, String> {
-        match self.get_task_as_mut(0).execute() {
-            Ok(()) => Ok(self),
-            Err(err) => Err(err),
-        }
-    }
-    pub fn term(&mut self, task_index: Option<usize>) -> Result<Value, String> {
-        match task_index {
-            Some(index) => {
-                let previous_index = (index - 1).try_into().unwrap();
-                let previous_task = self.get_task(previous_index);
-                let previous_task_output = previous_task.get_task_output();
-                let current_task = self.get_task_as_mut(index);
-                current_task.set_output_to_task(previous_task_output);
-                match current_task.execute() {
-                    Ok(()) => Ok(current_task.get_task_output()),
-                    Err(err) => Err(err),
-                }
-            }
-            None => {
-                let len = self.node_count();
-                Ok(self.get_task(len - 1).get_task_output())
-            }
-        }
-    }
+    // pub fn init(&mut self) -> Result<&mut Self, String> {
+    //     match self.get_task_as_mut(0).execute() {
+    //         Ok(()) => Ok(self),
+    //         Err(err) => Err(err),
+    //     }
+    // }
+
+    // pub fn term(&mut self, task_index: Option<usize>) -> Result<Value, String> {
+
+    //     match task_index {
+    //         Some(index) => {
+    //             let mut list = Vec::new();
+    //             let edges_list = self.edges.clone();
+    //             edges_list.iter().for_each(|(source, destination)| {
+    //                 if destination == &index {
+    //                     list.push(source)
+    //                 }
+    //             });
+    //             match list.len() {
+    //                 0 => {
+    //                     let current_task = self.get_task_as_mut(index);
+    //                     match current_task.execute() {
+    //                         Ok(()) => Ok(current_task.get_task_output()),
+    //                         Err(err) => Err(err),
+    //                     }
+    //                 }
+    //                 1 => {
+    //                     let previous_task_output = self.get_task(*list[0]).get_task_output();
+    //                     let current_task = self.get_task_as_mut(index);
+    //                     current_task.set_output_to_task(previous_task_output);
+    //                     match current_task.execute() {
+    //                         Ok(()) => Ok(current_task.get_task_output()),
+    //                         Err(err) => Err(err),
+    //                     }
+    //                 }
+    //                 _ => {
+    //                     let res: Vec<Value> = list
+    //                         .iter()
+    //                         .map(|index| {
+    //                             let previous_task = self.get_task(**index);
+    //                             let previous_task_output = previous_task.get_task_output();
+    //                             previous_task_output
+    //                         })
+    //                         .collect();
+
+    //                     let s: Value = res.into();
+    //                     let current_task = self.get_task_as_mut(index);
+    //                     current_task.set_output_to_task(s);
+
+    //                     match current_task.execute() {
+    //                         Ok(()) => Ok(current_task.get_task_output()),
+    //                         Err(err) => Err(err),
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         None => {
+    //             let len = self.node_count();
+    //             Ok(self.get_task(len - 1).get_task_output())
+    //         }
+    //     }
+    // }
 
     pub fn pipe(&mut self, task_index: usize) -> Result<&mut Self, String> {
-        let mut list = Vec::new();
-        let edges_list = self.edges.clone();
-        edges_list.iter().for_each(|(source, destination)| {
-            if destination == &task_index {
-                list.push(source)
-            }
-        });
-        #[allow(unused)]
-        let mut res: Vec<Value> = Vec::new();
-        match list.len() {
-            0 => match self.get_task_as_mut(task_index).execute() {
-                Ok(()) => Ok(self),
-                Err(err) => Err(err),
+        let len = self.nodes.len() - 1;
+
+        let action_name = self.get_task(task_index).get_action_name();
+        self.state_manger
+            .update_running(&action_name, task_index as isize);
+
+        let result = {
+
+            let mut list = Vec::new();
+            let edges_list = self.edges.clone();
+            edges_list.iter().for_each(|(source, destination)| {
+                if destination == &task_index {
+                    list.push(source)
+                }
+            });
+
+            match list.len() {
+                0 => {
+
+                    let task = self.get_task_as_mut(task_index);
+                        match task.execute() {
+                        Ok(()) => Ok(task.get_task_output()),
+                        Err(err) => Err(err),
+                        }
             },
-            1 => {
-                let previous_task_output = self.get_task(*list[0]).get_task_output();
-                let current_task = self.get_task_as_mut(task_index);
-                current_task.set_output_to_task(previous_task_output);
-                match current_task.execute() {
-                    Ok(()) => Ok(self),
-                    Err(err) => Err(err),
+                1 => {
+                    let previous_task_output = self.get_task(*list[0]).get_task_output();
+                    let current_task = self.get_task_as_mut(task_index);
+                    current_task.set_output_to_task(previous_task_output);
+                    match current_task.execute() {
+                        Ok(()) => Ok(current_task.get_task_output()),
+                        Err(err) => Err(err),
+                    }
+                }
+                _ => {
+                    let mut res: Vec<Value> = list
+                        .iter()
+                        .map(|index| {
+                            let previous_task = self.get_task(**index);
+                            let previous_task_output = previous_task.get_task_output();
+                            previous_task_output
+                        })
+                        .collect();
+
+                    let s: Value = res.into();
+                    let current_task = self.get_task_as_mut(task_index);
+                    current_task.set_output_to_task(s);
+
+                    match current_task.execute() {
+                        Ok(()) => Ok(current_task.get_task_output()),
+                        Err(err) => Err(err),
+                    }
                 }
             }
-            _ => {
-                res = list
-                    .iter()
-                    .map(|index| {
-                        let previous_task = self.get_task(**index);
-                        let previous_task_output = previous_task.get_task_output();
-                        previous_task_output
-                    })
-                    .collect();
+        };
 
-                let s: Value = res.into();
-                let current_task = self.get_task_as_mut(task_index);
-                current_task.set_output_to_task(s);
+        // let result =           if let 3 = task_index {
+        //     Err("error in task".to_string())
+        // }else{
+        //     result
+        // };
 
-                match current_task.execute() {
-                    Ok(()) => Ok(self),
-                    Err(err) => Err(err),
-                }
+        match result {
+            Ok(output) => {
+                self.state_manger.update_success(output);
+                Ok(self)
+            }
+            Err(err) => {
+                self.state_manger.update_err(&err);
+                Err(err)
             }
         }
     }
@@ -126,22 +195,25 @@ impl WorkflowGraph {
 macro_rules! impl_execute_trait {
     ($ ($struct : ty), *) => {
 
-        paste!{
-            $( impl Execute for $struct {
-                fn execute(&mut self) -> Result<(),String>{
+    paste!{$(
+    impl Execute for $struct {
+            fn execute(&mut self) -> Result<(),String>{
                 self.run()
-        }
+            }
 
-    fn get_task_output(&self) -> Value {
-        self.output().clone().into()
-    }
+            fn get_task_output(&self) -> Value {
+                self.output().clone().into()
+            }
 
-    fn set_output_to_task(&mut self, input: Value) {
-        self.setter(input)
-    }
-                }
-            )*
+            fn set_output_to_task(&mut self, input: Value) {
+                self.setter(input)
+            }
+
+            fn get_action_name(&self) -> String{
+                self.action_name.clone()
+            }
         }
+    )*}
     };
 }
 

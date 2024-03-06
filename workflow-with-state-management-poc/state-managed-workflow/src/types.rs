@@ -81,6 +81,8 @@ impl_execute_trait!(EmployeeIds, Getsalaries, Salary, Getaddress);
 pub fn main(args: Value) -> Result<Value, String> {
     const LIMIT: usize = 4;
     let mut workflow = WorkflowGraph::new(LIMIT);
+    workflow.state_manger.update_workflow_initialized();
+
     let input: Input = serde_json::from_value(args).map_err(|e| e.to_string())?;
 
     let employee_ids = EmployeeIds::new(input.role, "employee_ids".to_string());
@@ -100,61 +102,16 @@ pub fn main(args: Value) -> Result<Value, String> {
         (getaddress_index, salary_index),
     ]);
 
-    // let result = workflow
-    //     .init()?
-    //     .pipe(getsalaries_index)?
-    //     .pipe(getaddress_index)?
-    //     .pipe(salary_index)?
-    //     .term(None)?;    // salary is depending and term does not handle multiple deps
+    workflow
+        .pipe(employee_ids_index)?
+        .pipe(getsalaries_index)?
+        .pipe(getaddress_index)?
+        .pipe(salary_index)?;    // salary is depending and term does not handle multiple deps
 
-    let mut internal_state_data = StateData::init("employee_ids");
 
-    let mut result = match workflow.init() {
-        Ok(res) => {
-            internal_state_data.update("getsalaries", getsalaries_index);
-            res
-        }
-        Err(err) => {
-            internal_state_data.update_err(&err);
-            return Err(err);
-        }
-    };
-
-    let result = match result.pipe(getsalaries_index) {
-        Ok(res) => {
-            internal_state_data.update("getaddress", getaddress_index);
-            res
-        }
-        Err(err) => {
-            internal_state_data.update_err(&err);
-            return Err(err);
-        }
-    };
-
-    let result = match result.pipe(getaddress_index) {
-        Ok(res) => {
-            internal_state_data.update("salary", salary_index);
-            res
-        }
-        Err(err) => {
-            internal_state_data.update_err(&err);
-            return Err(err);
-        }
-    };
-
-    let result = match result.pipe(salary_index) {
-        Ok(res) => {
-            // internal_state_data.update("salary", getsalaries_index);     // there is no task left to execute
-            res
-        }
-        Err(err) => {
-            internal_state_data.update_err(&err);
-            return Err(err);
-        }
-    };
-
+    let len = workflow.node_count();
+    let output = workflow.get_task(len - 1).get_task_output();
     // simply returns the output
-    let result = result.term(None)?;
-    let result = serde_json::to_value(result).unwrap();
+    let result = serde_json::to_value(output).unwrap();
     Ok(result)
 }

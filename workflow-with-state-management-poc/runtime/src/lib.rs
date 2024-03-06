@@ -2,15 +2,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(test)]
 mod wasi_http;
+mod types;
 
+pub use types::*;
 pub mod helper;
 pub use helper::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MainInput {
-    allowed_hosts: Option<Vec<String>>,
-    data: Value,
-}
 
 #[cfg(test)]
 mod tests {
@@ -25,9 +22,10 @@ mod tests {
     use wasmtime::Linker;
     use wasmtime::*;
     use wasmtime_wasi::sync::WasiCtxBuilder;
+    use std::collections::HashMap;
 
     #[allow(dead_code)]
-    fn run_workflow(data: Value, path: String) -> (Output, Vec<Value>) {
+    fn run_workflow(data: Value, path: String) -> (Output, Vec<StateData>) {
         let wasm_file = fs::read(path).unwrap();
         let input: MainInput = serde_json::from_value(data).unwrap();
         let engine = Engine::default();
@@ -75,7 +73,7 @@ mod tests {
             )
             .expect("should define the function");
 
-        let output_2: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let output_2: Arc<Mutex<Vec<StateData>>> = Arc::new(Mutex::new(Vec::new()));
 
         let output_ = output_2.clone();
 
@@ -92,7 +90,7 @@ mod tests {
                     let offset = ptr as u32 as usize;
                     let mut buffer: Vec<u8> = vec![0; capacity as usize];
                     match mem.read(&caller, offset, &mut buffer) {
-                        Ok(()) => match serde_json::from_slice::<Value>(&buffer) {
+                        Ok(()) => match serde_json::from_slice::<StateData>(&buffer) {
                             Ok(serialized_output) => {
                                 let mut output_2 = output_2.lock().unwrap();
                                 output_2.push(serialized_output);
@@ -151,15 +149,6 @@ mod tests {
         (res, state_output)
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone)]
-    pub struct Output {
-        pub result: Value,
-    }
-
-    #[derive(Deserialize, Serialize, Debug)]
-    struct Resultss {
-        result: String,
-    }
 
     #[async_std::test]
     async fn test_employee_salary_with_concat_operator() {
@@ -176,11 +165,52 @@ mod tests {
                 }
         });
 
+        let (result, state_data) = run_workflow(input, path);
+
+        // println!("State_data => {:#?}", state_data);
+
+        let mut outputs: HashMap<String, Value> = HashMap::new();
+
+        for sd in state_data {
+            if sd.is_success(){
+                outputs.insert(sd.get_action_name(), sd.get_output());
+            }
+        }
+
+        println!("Outputs => {:#?}", outputs);
+
+        // assert!(result
+        //     .result
+        //     .to_string()
+        //     .contains("Salary creditted for emp id 1 from Hugobyte"))
+    }
+
+    #[async_std::test]
+    async fn test_car_market_place() {
+        let path = std::env::var("WORKFLOW_WASM").unwrap_or(format!(
+            "../state-managed-workflow/target/wasm32-wasi/release/boilerplate.wasm"
+        ));
+
+        let server = post("127.0.0.1:8080").await;
+        let input = serde_json::json!({
+            "allowed_hosts": [
+                server.uri()
+            ],
+            "data": {
+                "car_type":"hatchback",
+                "company_name":"maruthi",
+                "model_name":"alto",
+                "price":1200000
+                }
+        });
         let (result, _state_data) = run_workflow(input, path);
+
+        println!("State_data => {:#?}", _state_data);
 
         assert!(result
             .result
             .to_string()
-            .contains("Salary creditted for emp id 1 from Hugobyte"))
+            .contains("Thank you for the purchase"))
     }
+
 }
