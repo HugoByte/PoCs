@@ -44,6 +44,12 @@ pub struct Output {
     pub result: Value,
 }
 
+impl Output{
+    pub fn is_err(&self) -> bool{
+        self.result.get("Err").is_some()
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Resultss {
     pub result: String,

@@ -8,7 +8,6 @@ pub use types::*;
 pub mod helper;
 pub use helper::*;
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -23,9 +22,28 @@ mod tests {
     use wasmtime::*;
     use wasmtime_wasi::sync::WasiCtxBuilder;
     use std::collections::HashMap;
+    use cached::RedisCache;
+use cached::IOCached;
+use sha256::digest;
 
     #[allow(dead_code)]
+
     fn run_workflow(data: Value, path: String) -> (Output, Vec<StateData>) {
+
+        let redis_cache: RedisCache<String, (Output , Vec<StateData>)> = RedisCache::new("workflow".to_string(), 30)
+        .set_connection_string("redis://127.0.0.1:6379")
+        .set_refresh(true)
+        // .set_namespace("workflows")
+        .build()
+        .unwrap();
+        
+        let key = digest(format!("{:?}{:?}", data, path));
+        let output = redis_cache.cache_get(&key).unwrap();
+        if output.is_some() {
+            println!("workflow cache hit!");
+            return output.unwrap();
+        }
+
         let wasm_file = fs::read(path).unwrap();
         let input: MainInput = serde_json::from_value(data).unwrap();
         let engine = Engine::default();
@@ -146,14 +164,23 @@ mod tests {
 
         let state_output = output_2.lock().unwrap().clone();
         let res = output.lock().unwrap().clone();
+
+        if !res.is_err(){
+            // caching the results
+            println!("workflow cache set!");
+            redis_cache.cache_set(key, (res.clone(), state_output.clone())).unwrap();
+        }else{
+            println!("workflow cache miss!");
+        }
+
         (res, state_output)
     }
-
 
     #[async_std::test]
     async fn test_employee_salary_with_concat_operator() {
         let path = std::env::var("WORKFLOW_WASM").unwrap_or(format!(
             "../state-managed-workflow/target/wasm32-wasi/release/boilerplate.wasm"
+            // "/Users/ajaykumar/Downloads/Github/Hugobyte/testing/runtime_dev/sled_db_examples/boilerplate-copy.wasm"
         ));
         let server = post("127.0.0.1:1234").await;
         let input = serde_json::json!({
@@ -178,11 +205,12 @@ mod tests {
         }
 
         println!("Outputs => {:#?}", outputs);
+        println!("Result => {:#?}", result);
 
-        // assert!(result
-        //     .result
-        //     .to_string()
-        //     .contains("Salary creditted for emp id 1 from Hugobyte"))
+        assert!(result
+            .result
+            .to_string()
+            .contains("Salary creditted for emp id 1 from Hugobyte"))
     }
 
     #[async_std::test]

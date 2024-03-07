@@ -80,7 +80,7 @@ impl_execute_trait!(EmployeeIds, Getsalaries, Salary, Getaddress);
 #[allow(dead_code, unused)]
 pub fn main(args: Value) -> Result<Value, String> {
     const LIMIT: usize = 4;
-    let mut workflow = WorkflowGraph::new(LIMIT);
+    let mut workflow = WorkflowGraph::new(LIMIT, "employee_salary_id");
     workflow.state_manger.update_workflow_initialized();
 
     let input: Input = serde_json::from_value(args).map_err(|e| e.to_string())?;

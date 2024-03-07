@@ -6,14 +6,16 @@ use paste::paste;
 pub struct WorkflowGraph {
     edges: Vec<(usize, usize)>,
     nodes: Vec<Box<dyn Execute>>,
+    pub workflow_id: String,
     pub state_manger: StateManager,
 }
 
 impl WorkflowGraph {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, workflow_id: &str) -> Self {
         WorkflowGraph {
             nodes: Vec::with_capacity(size),
             edges: Vec::new(),
+            workflow_id: workflow_id.to_string(),
             state_manger: StateManager::init(),
         }
     }
@@ -118,9 +120,26 @@ impl WorkflowGraph {
     pub fn pipe(&mut self, task_index: usize) -> Result<&mut Self, String> {
         let len = self.nodes.len() - 1;
 
-        let action_name = self.get_task(task_index).get_action_name();
-        self.state_manger
-            .update_running(&action_name, task_index as isize);
+        // let redis_cache: RedisCache<String, Value> = RedisCache::new(self.workflow_id.clone(), 60*60)
+        // .set_connection_string("redis://127.0.0.1:6379")
+        // .set_refresh(true)
+        // .set_namespace("workflows")
+        // .build()
+        // .unwrap();
+
+        let task = self.get_task(task_index);
+        // let key = digest(serde_json::to_string(&task.get_json_string()).unwrap());
+        let action_name = task.get_action_name();
+
+        self.state_manger.update_running(&action_name, task_index as isize);
+        
+        // let output = redis_cache.cache_get(&key).unwrap();
+        // if output.is_some() {
+        //     println!("cache hit for task {}", action_name);
+        //     let output = output.unwrap();
+        //     let task = self.get_task_as_mut(task_index);
+        //     task.set_output_to_task(output);
+        // }
 
         let result = {
 
@@ -212,6 +231,11 @@ macro_rules! impl_execute_trait {
             fn get_action_name(&self) -> String{
                 self.action_name.clone()
             }
+
+            fn get_json_string(&self) -> String{
+                serde_json::to_string(&self).unwrap()
+            }
+
         }
     )*}
     };
