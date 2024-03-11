@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+mod types;
 #[cfg(test)]
 mod wasi_http;
-mod types;
 
 pub use types::*;
 pub mod helper;
@@ -11,6 +11,10 @@ pub use helper::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cached::IOCached;
+    use cached::RedisCache;
+    use sha256::digest;
+    use std::collections::HashMap;
     use std::convert::TryInto;
     use std::{
         fs,
@@ -21,22 +25,18 @@ mod tests {
     use wasmtime::Linker;
     use wasmtime::*;
     use wasmtime_wasi::sync::WasiCtxBuilder;
-    use std::collections::HashMap;
-    use cached::RedisCache;
-use cached::IOCached;
-use sha256::digest;
 
     #[allow(dead_code)]
 
     fn run_workflow(data: Value, path: String) -> (Output, Vec<StateData>) {
+        let redis_cache: RedisCache<String, (Output, Vec<StateData>)> =
+            RedisCache::new("workflow".to_string(), 30)
+                .set_connection_string("redis://127.0.0.1:6379")
+                .set_refresh(true)
+                // .set_namespace("workflows")
+                .build()
+                .unwrap();
 
-        let redis_cache: RedisCache<String, (Output , Vec<StateData>)> = RedisCache::new("workflow".to_string(), 30)
-        .set_connection_string("redis://127.0.0.1:6379")
-        .set_refresh(true)
-        // .set_namespace("workflows")
-        .build()
-        .unwrap();
-        
         let key = digest(format!("{:?}{:?}", data, path));
         let output = redis_cache.cache_get(&key).unwrap();
         if output.is_some() {
@@ -161,15 +161,16 @@ use sha256::digest;
             .call(&mut store, (data_ptr, data.len() as i32, 2))
             .unwrap();
 
-
         let state_output = output_2.lock().unwrap().clone();
         let res = output.lock().unwrap().clone();
 
-        if !res.is_err(){
+        if !res.is_err() {
             // caching the results
             println!("workflow cache set!");
-            redis_cache.cache_set(key, (res.clone(), state_output.clone())).unwrap();
-        }else{
+            redis_cache
+                .cache_set(key, (res.clone(), state_output.clone()))
+                .unwrap();
+        } else {
             println!("workflow cache miss!");
         }
 
@@ -179,8 +180,7 @@ use sha256::digest;
     #[async_std::test]
     async fn test_employee_salary_with_concat_operator() {
         let path = std::env::var("WORKFLOW_WASM").unwrap_or(format!(
-            "../state-managed-workflow/target/wasm32-wasi/release/boilerplate.wasm"
-            // "/Users/ajaykumar/Downloads/Github/Hugobyte/testing/runtime_dev/sled_db_examples/boilerplate-copy.wasm"
+            "../state-managed-workflow/target/wasm32-wasi/release/boilerplate.wasm" // "/Users/ajaykumar/Downloads/Github/Hugobyte/testing/runtime_dev/sled_db_examples/boilerplate-copy.wasm"
         ));
         let server = post("127.0.0.1:1234").await;
         let input = serde_json::json!({
@@ -199,7 +199,7 @@ use sha256::digest;
         let mut outputs: HashMap<String, Value> = HashMap::new();
 
         for sd in state_data {
-            if sd.is_success(){
+            if sd.is_success() {
                 outputs.insert(sd.get_action_name(), sd.get_output());
             }
         }
@@ -240,5 +240,4 @@ use sha256::digest;
             .to_string()
             .contains("Thank you for the purchase"))
     }
-
 }
